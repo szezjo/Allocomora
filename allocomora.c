@@ -66,6 +66,12 @@ void *find_free_chunk(size_t size) {
     return best_fit;
 }
 
+void update_heap_data() {
+    struct chunk_t *ch = heap.head_chunk;
+    while(ch->next!=NULL) ch=ch->next;
+    heap.tail_chunk=ch;
+}
+
 void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     struct chunk_t *chunk_to_alloc = find_free_chunk(count);
     printf("Found a free chunk %p.\n", chunk_to_alloc);
@@ -75,6 +81,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             chunk_to_alloc->alloc=1;
             chunk_to_alloc->debug_line=fileline;
             chunk_to_alloc->debug_file=filename;
+            update_heap_data();
             return (void*)((char*)chunk_to_alloc+sizeof(struct chunk_t));
         }
         else if(chunk_to_alloc->size>count+sizeof(struct chunk_t)) {
@@ -88,9 +95,17 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             res->alloc=1;
             res->debug_line=fileline;
             res->debug_file=filename;
+            update_heap_data();
             return (void*)((char*)res+sizeof(struct chunk_t));
         }
     }
+    // free block not found. asking for more pages
+    size_t wanted_size = count+sizeof(struct chunk_t);
+    intptr_t wanted_memory = PAGE_SIZE*((wanted_size/PAGE_SIZE)+(!!(wanted_size%PAGE_SIZE)));
+    if (custom_sbrk(wanted_memory)==(void*)-1) return NULL;
+    heap.pages+=wanted_memory/PAGE_SIZE;
+    return NULL; //function unfinished, have to add allocating large block
+
 }
 
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {

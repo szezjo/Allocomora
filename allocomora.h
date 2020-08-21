@@ -25,7 +25,7 @@ struct heap_t {
     struct chunk_t *tail_chunk;
     int *end_fence_p;
     char is_set;
-    int *data;
+    void *data;
     //size_t size;
     int pages;
     int blocks;
@@ -34,6 +34,7 @@ struct heap_t {
 int heap_setup();
 void *heap_malloc_debug(size_t count, int fileline, const char* filename);
 void *find_free_chunk(size_t size);
+void update_heap_data();
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
 //change test vscode 
