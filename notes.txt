@@ -1,0 +1,30 @@
+6000 B - żądany rozmiar do alokacji (uwzględniając sizeof(struct chunk_t))
+4096 B - 1 strona
+
+Wymagane są 2 strony (8192 B), by zmieścić 6000 B do alokacji.
+
+4096/PAGE_SIZE=1 | 4096%PAGE_SIZE=0
+3072/PAGE_SIZE=0 | 3072%PAGE_SIZE=3072
+8192/PAGE_SIZE=2 | 8192%PAGE_SIZE=0
+6000/PAGE_SIZE=1 | 6000%PAGE_SIZE=1904
+
+Jeśli reszta z dzielenia wynosi 0: poproś o size.
+Jesli reszta z dzielenia nie wynosi 0: poproś o PAGE_SIZE*((size/PAGE_SIZE)+1)
+
+Poproś o PAGE_SIZE*((size/PAGE_SIZE)+(!!(size%PAGE_SIZE))
+
+dla 4096: 4096*((4096/4096)+0)=4096 (OK)
+dla 3072: 4096*((3072/4096)+1)=4096 (OK)
+dla 8192: 4096*((8192/4096)+0)=8192 (OK)
+dla 6000: 4096*((6000/4096)+1)=8192 (OK)
+
+
+
+
+
+---
+
+
+Operacje MALLOC (zwiększanie pamięci):
+- jeśli ostatni blok jest wolny, złącz z nim nową pamięć i wykonaj alokację
+- jeśli ostatni blok nie jest wolny, stwórz nowy wolny blok i wykonaj alokację
