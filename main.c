@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "custom_unistd.h"
 
+//main changed to main2, so I can execute test main in allocomora.c
 
 int main2(int argc, char **argv)
 {
