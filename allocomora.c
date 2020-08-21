@@ -32,16 +32,18 @@ int heap_setup() {
 
     heap.is_set=1;
     heap.pages=PAGES_BGN;
-    heap.blocks=1;
+    heap.chunks=1;
 
-    int end_fence=LASFENCE;
-    int *end_fence_e=(int*)(heap.head_chunk+sizeof(struct chunk_t)+heap.head_chunk->size);
-    memcpy(end_fence_e,&end_fence,sizeof(int));
-    heap.end_fence_p=end_fence_e;
-
-    printf("test here\n");
+    update_end_fence();
 
     return 0;
+}
+
+void update_end_fence() {
+    int end_fence=LASFENCE;
+    int *end_fence_e=(int*)(heap.tail_chunk+sizeof(struct chunk_t)+heap.tail_chunk->size);
+    memcpy(end_fence_e,&end_fence,sizeof(int));
+    heap.end_fence_p=end_fence_e;
 }
 
 void *find_free_chunk(size_t size) {
@@ -100,12 +102,35 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
         }
     }
     // free block not found. asking for more pages
-    size_t wanted_size = count+sizeof(struct chunk_t);
+    size_t wanted_size;
+    if (heap.tail_chunk->alloc) wanted_size=count+sizeof(struct chunk_t);
+    else wanted_size=count;
     intptr_t wanted_memory = PAGE_SIZE*((wanted_size/PAGE_SIZE)+(!!(wanted_size%PAGE_SIZE)));
     if (custom_sbrk(wanted_memory)==(void*)-1) return NULL;
     heap.pages+=wanted_memory/PAGE_SIZE;
-    return NULL; //function unfinished, have to add allocating large block
 
+    if(heap.tail_chunk->alloc) {
+        struct chunk_t new_chunk;
+        struct chunk_t *new_tail = heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t);
+
+        new_chunk.first_fence=FIRFENCE;
+        new_chunk.second_fence=SECFENCE;
+        new_chunk.size=wanted_memory;
+        new_chunk.prev=heap.tail_chunk;
+        new_chunk.next=NULL;
+        heap.tail_chunk->next=new_tail;
+        new_chunk.alloc=0;
+        
+        memcpy(new_tail,&new_chunk,sizeof(struct chunk_t));
+        heap.tail_chunk=new_tail;
+        heap.chunks++;
+    }
+    else {
+        heap.tail_chunk->size=heap.tail_chunk->size+wanted_memory;
+    }
+
+    update_end_fence();
+    return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
 }
 
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
@@ -121,6 +146,7 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     memcpy(cut_p,&cut,sizeof(struct chunk_t));
     chunk_to_split->size=size;
     chunk_to_split->next=cut_p;
+    heap.chunks++;
 
     return chunk_to_split;
 }
@@ -129,16 +155,20 @@ int main() {
     int tmp = heap_setup();
     //struct chunk_t *p = find_free_chunk(150);
     printf("err: %d\n",tmp);
+    printf("End fence address: %p\n",heap.end_fence_p);
     printf("something\n");
-    struct chunk_t *p = find_free_chunk(8150);
+    struct chunk_t *p = find_free_chunk(1);
     if(p==NULL) printf("returned NULL\n");
     else printf("size of found block: %lu\n",p->size);
     //printf("fence 1: %d\n",p->first_fence);
     //find_free_chunk(150);
-    struct chunk_t *chk = heap_malloc_debug(250, __LINE__, __FILE__);
+    struct chunk_t *chk = heap_malloc_debug(4024, __LINE__, __FILE__);
     printf("Size of chunk 1: %lu\n",heap.head_chunk->size);
-    printf("Size of chunk 2: %lu\n",heap.head_chunk->next->size);
+    //printf("Size of chunk 2: %lu\n",heap.head_chunk->next->size);
     //printf("Size of chunk 3: %lu\n",heap.head_chunk->next->next->size);
     printf("Size of chunk_t: %lu\n",sizeof(struct chunk_t));
-    printf("Fence at the end: %d\n",*((int*)(heap.head_chunk->next+sizeof(struct chunk_t)+heap.head_chunk->next->size)));
+    printf("Updated end fence\n");
+    printf("Fence at the end: %d\n",*(heap.end_fence_p));
+    printf("End fence address: %p\n",heap.end_fence_p);
+    printf("Size of tail chunk: %lu\n",heap.tail_chunk->size);
 }
