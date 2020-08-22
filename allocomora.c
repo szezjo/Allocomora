@@ -40,6 +40,23 @@ int heap_setup() {
     return 0;
 }
 
+void heap_free(void* memblock) {
+    if(get_pointer_type(memblock)!=pointer_valid) return;
+    struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
+    chunk->alloc=0;
+
+    if(chunk->prev!=NULL && chunk->prev->alloc==0) {
+        chunk=merge(chunk->prev,chunk);
+        heap.chunks--;
+    }
+    if(chunk->next!=NULL && chunk->next->alloc==0) {
+        chunk=merge(chunk,chunk->next);
+        heap.chunks--;
+    }
+
+    update_heap_data();
+}
+
 void update_end_fence() {
     int end_fence=LASFENCE;
     int *end_fence_e=(int*)(heap.tail_chunk+sizeof(struct chunk_t)+heap.tail_chunk->size);
@@ -227,7 +244,15 @@ int main() {
     print_pointer_type(chk+4);
     print_pointer_type(find_free_chunk(1)+sizeof(struct chunk_t)); */
 
-    split(heap.head_chunk,2000);
-    printf("%ld %ld\n", heap.head_chunk->size, heap.head_chunk->next->size );
-    merge(heap.head_chunk,heap.head_chunk->next);
+    //split(heap.head_chunk,2000);
+    //printf("%ld %ld\n", heap.head_chunk->size, heap.head_chunk->next->size );
+    //merge(heap.head_chunk,heap.head_chunk->next);
+
+    struct chunk_t *p = heap_malloc_debug(3000,0,NULL);
+    assert(p!=NULL);
+    struct chunk_t *r = find_free_chunk(2000);
+    print_pointer_type(r);
+    heap_free(p);
+    struct chunk_t *s = find_free_chunk(2000);
+    print_pointer_type(s);
 }

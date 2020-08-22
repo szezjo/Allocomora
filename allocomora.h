@@ -44,6 +44,7 @@ enum pointer_type_t
 
 int heap_setup();
 void *heap_malloc_debug(size_t count, int fileline, const char* filename);
+void heap_free(void* memblock);
 void *find_free_chunk(size_t size);
 enum pointer_type_t get_pointer_type(const void* pointer);
 void update_heap_data();
