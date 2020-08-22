@@ -262,6 +262,69 @@ void* heap_get_data_block_start(const void* pointer) {
     return NULL;
 }
 
+size_t heap_get_used_space(void) {
+    struct chunk_t *tmp = heap.head_chunk;
+    size_t size=0;
+    while(tmp) {
+        size+=sizeof(struct chunk_t);
+        if(tmp->alloc) size+=tmp->size;
+        tmp=tmp->next;
+    }
+    size+=sizeof(int); //size of the end fence
+    return size;
+}
+size_t heap_get_largest_used_block_size(void) {
+    struct chunk_t *tmp = heap.head_chunk;
+    size_t max=0;
+    while(tmp) {
+        if(tmp->alloc && tmp->size>max) max=tmp->size;
+        tmp=tmp->next;
+    }
+    return max;
+}
+
+uint64_t heap_get_used_blocks_count(void) {
+    struct chunk_t *tmp = heap.head_chunk;
+    uint64_t count=0;
+    while(tmp) {
+        if(tmp->alloc) count++;
+        tmp=tmp->next;
+    }
+    return count;
+}
+
+size_t heap_get_free_space(void) {
+    struct chunk_t *tmp = heap.head_chunk;
+    size_t size=0;
+    while(tmp) {
+        if(tmp->alloc==0) size+=tmp->size;
+        tmp=tmp->next;
+    }
+    return size;
+}
+
+size_t heap_get_largest_free_area(void) {
+    struct chunk_t *tmp = heap.head_chunk;
+    size_t max=0;
+    while(tmp) {
+        if(tmp->alloc==0 && tmp->size>max) max=tmp->size;
+        tmp=tmp->next;
+    }
+    return max;
+}
+
+uint64_t heap_get_free_gaps_count(void) {
+    struct chunk_t *tmp = heap.head_chunk;
+    uint64_t count=0;
+    while(tmp) {
+        if(tmp->alloc==0 && tmp->size>=sizeof(void*)+sizeof(struct chunk_t)) count++;
+        tmp=tmp->next;
+    }
+    return count;
+}
+
+
+
 int main() {
     int tmp = heap_setup();
     //struct chunk_t *p = find_free_chunk(150);

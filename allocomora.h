@@ -55,6 +55,12 @@ enum pointer_type_t get_pointer_type(const void* pointer);
 void update_heap_data();
 void update_end_fence();
 void* heap_get_data_block_start(const void* pointer);
+size_t heap_get_used_space(void);
+size_t heap_get_largest_used_block_size(void);
+uint64_t heap_get_used_blocks_count(void); 
+size_t heap_get_free_space(void);
+size_t heap_get_largest_free_area(void);
+uint64_t heap_get_free_gaps_count(void);
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
