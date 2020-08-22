@@ -45,14 +45,8 @@ void heap_free(void* memblock) {
     struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
     chunk->alloc=0;
 
-    if(chunk->prev!=NULL && chunk->prev->alloc==0) {
-        chunk=merge(chunk->prev,chunk);
-        heap.chunks--;
-    }
-    if(chunk->next!=NULL && chunk->next->alloc==0) {
-        chunk=merge(chunk,chunk->next);
-        heap.chunks--;
-    }
+    if(chunk->prev!=NULL && chunk->prev->alloc==0) chunk=merge(chunk->prev,chunk,1);
+    if(chunk->next!=NULL && chunk->next->alloc==0) chunk=merge(chunk,chunk->next,1);
 
     update_heap_data();
 }
@@ -180,11 +174,53 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
 }
 
-struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2) {
+void *heap_calloc_debug(size_t number, size_t size, int fileline, const char* filename) {
+    size_t size_to_alloc = number*size;
+    struct chunk_t *p = heap_malloc_debug(size_to_alloc,fileline,filename);
+    if(p==NULL) return NULL;
+    memset(p,0,size_to_alloc);
+    return (void*)((char*)p+sizeof(struct chunk_t));
+}
+
+void *heap_realloc_debug(void *memblock, size_t size, int fileline, const char *filename) {
+    if(memblock==NULL) return heap_malloc_debug(size,fileline,filename);
+    if(size==0) {
+        heap_free(memblock);
+        return NULL;
+    }
+    struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
+    if(chunk->size==size) return memblock;
+    if(chunk->size>size+sizeof(struct chunk_t)) {
+        split(chunk,size);
+        return memblock;
+    }
+    if(chunk->next && chunk->next->alloc==0 && chunk->next->size+chunk->size+sizeof(struct chunk_t)>size) {
+        merge(chunk,chunk->next,0);
+        split(chunk,size);
+        return memblock;
+    }
+
+    char *p = heap_malloc_debug(size, fileline, filename);
+    if (p==NULL) return NULL;
+    memcpy(p,memblock,chunk->size);
+    heap_free(memblock);
+    return p;
+}
+
+void *heap_malloc(size_t count) {
+    return heap_malloc_debug(count,0,NULL);
+}
+void *heap_calloc(size_t number, size_t size) {
+    return heap_calloc_debug(number,size,0,NULL);
+}
+void *heap_realloc(void *memblock, size_t size) {
+    return heap_realloc_debug(memblock,size,0,NULL);
+}
+struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode) {
     if(chunk1==NULL || chunk2==NULL) return NULL;
-    if(chunk2->next==chunk1) return merge(chunk2, chunk1);
+    if(chunk2->next==chunk1) return merge(chunk2, chunk1, safe_mode);
     if(chunk1->next!=chunk2) return NULL;
-    if(chunk1->alloc==1 || chunk2->alloc==1) return NULL;
+    if(safe_mode==1 && chunk1->alloc==1 || chunk2->alloc==1) return NULL;
     printf("Merging %p (%ld) with %p (%ld)\n",chunk1,chunk1->size,chunk2,chunk2->size);
 
     chunk1->size=chunk1->size+chunk2->size+sizeof(struct chunk_t);
@@ -209,7 +245,7 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     chunk_to_split->size=size;
     chunk_to_split->next=cut_p;
     heap.chunks++;
-
+    if(cut_p->next && cut_p->next->alloc==0) merge(cut_p,cut_p->next,1);
     return chunk_to_split;
 }
 
@@ -248,11 +284,18 @@ int main() {
     //printf("%ld %ld\n", heap.head_chunk->size, heap.head_chunk->next->size );
     //merge(heap.head_chunk,heap.head_chunk->next);
 
-    struct chunk_t *p = heap_malloc_debug(3000,0,NULL);
-    assert(p!=NULL);
-    struct chunk_t *r = find_free_chunk(2000);
-    print_pointer_type(r);
-    heap_free(p);
-    struct chunk_t *s = find_free_chunk(2000);
-    print_pointer_type(s);
+    printf("Chunks: %d\n",heap.chunks);
+    char *str = heap_malloc(50);
+    strcpy(str,"Ala ma kota");
+    printf("%s\n",str);
+    printf("Chunks: %d\n",heap.chunks);
+    char *str2 = heap_realloc(str,12);
+    printf("%s\n%s\n",str,str2);
+    printf("Chunks: %d\n",heap.chunks);
+    int dif = (heap.head_chunk->next - heap.head_chunk) * sizeof(int);
+    printf("%d\n",dif);
+    
+    heap_free(str2);
+    printf("Chunks: %d\n",heap.chunks);
+    
 }

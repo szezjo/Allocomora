@@ -44,12 +44,17 @@ enum pointer_type_t
 
 int heap_setup();
 void *heap_malloc_debug(size_t count, int fileline, const char* filename);
+void* heap_calloc_debug(size_t number, size_t size, int fileline, const char* filename); 
+void* heap_realloc_debug(void* memblock, size_t size, int fileline, const char* filename);
+void *heap_malloc(size_t count);
+void *heap_calloc(size_t number, size_t size);
+void *heap_realloc(void* memblock, size_t size);
 void heap_free(void* memblock);
 void *find_free_chunk(size_t size);
 enum pointer_type_t get_pointer_type(const void* pointer);
 void update_heap_data();
 void update_end_fence();
-struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2);
+struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
 //change test vscode 
