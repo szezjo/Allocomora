@@ -4,7 +4,7 @@
 #include "allocomora.h"
 #include "custom_unistd.h"
 
-// Control number: 103
+// Control number: 104
 static struct heap_t heap;
 
 int heap_setup() {
@@ -134,6 +134,19 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
 }
 
+struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2) {
+    if(chunk1==NULL || chunk2==NULL) return NULL;
+    if(chunk2->next==chunk1) return merge(chunk2, chunk1);
+    if(chunk1->next!=chunk2) return NULL;
+    if(chunk1->alloc==1 || chunk2->alloc==1) return NULL;
+    printf("Merging %p with %p",chunk1,chunk2);
+
+    chunk1->size=chunk1->size+chunk2->size+sizeof(struct chunk_t);
+    chunk1->next=chunk2->next;
+    if(chunk1->next) chunk1->next->prev=chunk1;
+    update_heap_data();
+    return chunk1;
+}
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     struct chunk_t cut;
     cut.size=chunk_to_split->size-size-sizeof(struct chunk_t);

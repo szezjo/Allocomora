@@ -36,6 +36,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename);
 void *find_free_chunk(size_t size);
 void update_heap_data();
 void update_end_fence();
+struct chunk_t *merge(struct chunk_t chunk1, struct chunk_t chunk2);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
 //change test vscode 
