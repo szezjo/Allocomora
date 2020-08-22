@@ -293,6 +293,7 @@ int main() {
     printf("%s\n%s\n",str,str2);
     printf("Chunks: %d\n",heap.chunks);
     int dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
+    printf("Test: %s %p\n",(char*)((char*)heap.head_chunk+sizeof(struct chunk_t)), str2);
     printf("%d\n",dif);
     
     heap_free(str2);
