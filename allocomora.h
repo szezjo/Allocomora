@@ -29,6 +29,7 @@ struct heap_t {
     //size_t size;
     int pages;
     int chunks;
+    int checksum;
 };
 
 enum pointer_type_t
