@@ -168,12 +168,14 @@ struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2) {
     if(chunk2->next==chunk1) return merge(chunk2, chunk1);
     if(chunk1->next!=chunk2) return NULL;
     if(chunk1->alloc==1 || chunk2->alloc==1) return NULL;
-    printf("Merging %p with %p",chunk1,chunk2);
+    printf("Merging %p (%ld) with %p (%ld)\n",chunk1,chunk1->size,chunk2,chunk2->size);
 
     chunk1->size=chunk1->size+chunk2->size+sizeof(struct chunk_t);
     chunk1->next=chunk2->next;
     if(chunk1->next) chunk1->next->prev=chunk1;
     update_heap_data();
+    heap.chunks--;
+    printf("Merged %p (%ld)\n",chunk1,chunk1->size);
     return chunk1;
 }
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
@@ -197,7 +199,7 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
 int main() {
     int tmp = heap_setup();
     //struct chunk_t *p = find_free_chunk(150);
-    printf("err: %d\n",tmp);
+    /* printf("err: %d\n",tmp);
     printf("End fence address: %p\n",heap.end_fence_p);
     printf("something\n");
     struct chunk_t *p = find_free_chunk(1);
@@ -223,5 +225,9 @@ int main() {
     print_pointer_type(heap.head_chunk);
     print_pointer_type(chk);
     print_pointer_type(chk+4);
-    print_pointer_type(find_free_chunk(1)+sizeof(struct chunk_t));
+    print_pointer_type(find_free_chunk(1)+sizeof(struct chunk_t)); */
+
+    split(heap.head_chunk,2000);
+    printf("%ld %ld\n", heap.head_chunk->size, heap.head_chunk->next->size );
+    merge(heap.head_chunk,heap.head_chunk->next);
 }
