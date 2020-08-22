@@ -249,6 +249,19 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     return chunk_to_split;
 }
 
+void* heap_get_data_block_start(const void* pointer) {
+    enum pointer_type_t type = get_pointer_type(pointer);
+    if(type==pointer_valid) return (void*)pointer;
+    if(type!=pointer_inside_data_block) return NULL;
+
+    struct chunk_t *tmp = heap.head_chunk;
+    while(tmp) {
+        if((char*)pointer>=(char*)tmp && (char*)pointer<(char*)tmp+sizeof(struct chunk_t)+tmp->size) return tmp;
+        tmp=tmp->next;
+    }
+    return NULL;
+}
+
 int main() {
     int tmp = heap_setup();
     //struct chunk_t *p = find_free_chunk(150);
@@ -293,8 +306,11 @@ int main() {
     printf("%s\n%s\n",str,str2);
     printf("Chunks: %d\n",heap.chunks);
     int dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
-    printf("Test: %s %p\n",(char*)((char*)heap.head_chunk+sizeof(struct chunk_t)), str2);
+    printf("Test: %s %p\n",(char*)((char*)heap.head_chunk+sizeof(struct chunk_t)+2), str2);
     printf("%d\n",dif);
+
+    struct chunk_t *tt = heap_get_data_block_start((char*)heap.head_chunk+sizeof(struct chunk_t)+2);
+    printf("Size of tt: %ld\n", tt->size);
     
     heap_free(str2);
     printf("Chunks: %d\n",heap.chunks);

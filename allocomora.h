@@ -54,6 +54,7 @@ void *find_free_chunk(size_t size);
 enum pointer_type_t get_pointer_type(const void* pointer);
 void update_heap_data();
 void update_end_fence();
+void* heap_get_data_block_start(const void* pointer);
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
