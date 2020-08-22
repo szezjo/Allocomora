@@ -31,12 +31,24 @@ struct heap_t {
     int chunks;
 };
 
+enum pointer_type_t
+{
+      pointer_null,
+      pointer_out_of_heap,
+      pointer_control_block,
+      pointer_inside_data_block,
+      pointer_unallocated,
+      pointer_valid,
+      pointer_end_fence // if get_pointer_type returns it, pointer points at the end fence (int at the end of the heap).
+};
+
 int heap_setup();
 void *heap_malloc_debug(size_t count, int fileline, const char* filename);
 void *find_free_chunk(size_t size);
+enum pointer_type_t get_pointer_type(const void* pointer);
 void update_heap_data();
 void update_end_fence();
-struct chunk_t *merge(struct chunk_t chunk1, struct chunk_t chunk2);
+struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
 //change test vscode 

@@ -69,6 +69,35 @@ void *find_free_chunk(size_t size) {
     return best_fit;
 }
 
+enum pointer_type_t get_pointer_type(const void* pointer) {
+    if(pointer==NULL) return pointer_null;
+    const char *p = (char*)pointer; // to perform pointer arithmetic
+    if(p<(char*)heap.data || p>=(char*)(heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int))) return pointer_out_of_heap;
+    if(p>=(char*)heap.end_fence_p && p<(char*)heap.end_fence_p+sizeof(int)) return pointer_end_fence;
+    struct chunk_t *i=heap.head_chunk;
+    while(i!=NULL) {
+        if(p>=(char*)i && p<(char*)i+sizeof(struct chunk_t)+i->size) {
+            if(p>=(char*)i && p<(char*)i+sizeof(struct chunk_t)) return pointer_control_block;
+            if(i->alloc==0) return pointer_unallocated;
+            if(p==(char*)i+sizeof(struct chunk_t)) return pointer_valid;
+            return pointer_inside_data_block;
+        }
+        i=i->next;
+    }
+    return pointer_out_of_heap;
+}
+
+void print_pointer_type(const void* pointer) {
+    enum pointer_type_t type = get_pointer_type(pointer);
+    if(type==pointer_null) printf("[%p] is null\n", pointer);
+    else if (type==pointer_out_of_heap) printf("[%p] is out of heap\n", pointer);
+    else if (type==pointer_control_block) printf("[%p] is inside control block\n", pointer);
+    else if (type==pointer_inside_data_block) printf("[%p] is inside data block\n", pointer);
+    else if (type==pointer_unallocated) printf("[%p] is unallocated\n", pointer);
+    else if (type==pointer_valid) printf("[%p] is valid\n",pointer);
+    else if (type==pointer_end_fence) printf("[%p] is at the end fence\n", pointer);
+}
+
 void update_heap_data() {
     struct chunk_t *ch = heap.head_chunk;
     while(ch->next!=NULL) ch=ch->next;
@@ -176,7 +205,7 @@ int main() {
     else printf("size of found block: %lu\n",p->size);
     //printf("fence 1: %d\n",p->first_fence);
     //find_free_chunk(150);
-    struct chunk_t *chk = heap_malloc_debug(4024, __LINE__, __FILE__);
+    struct chunk_t *chk = heap_malloc_debug(3000, __LINE__, __FILE__);
     printf("Size of chunk 1: %lu\n",heap.head_chunk->size);
     //printf("Size of chunk 2: %lu\n",heap.head_chunk->next->size);
     //printf("Size of chunk 3: %lu\n",heap.head_chunk->next->next->size);
@@ -185,4 +214,14 @@ int main() {
     printf("Fence at the end: %d\n",*(heap.end_fence_p));
     printf("End fence address: %p\n",heap.end_fence_p);
     printf("Size of tail chunk: %lu\n",heap.tail_chunk->size);
+
+    printf("Out of heap address(?) %p\n",heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int));
+    print_pointer_type(NULL);
+    print_pointer_type(heap.end_fence_p);
+    print_pointer_type(heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t));
+    print_pointer_type(heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int));
+    print_pointer_type(heap.head_chunk);
+    print_pointer_type(chk);
+    print_pointer_type(chk+4);
+    print_pointer_type(find_free_chunk(1)+sizeof(struct chunk_t));
 }
