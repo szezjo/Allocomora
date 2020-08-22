@@ -292,7 +292,7 @@ int main() {
     char *str2 = heap_realloc(str,12);
     printf("%s\n%s\n",str,str2);
     printf("Chunks: %d\n",heap.chunks);
-    int dif = (heap.head_chunk->next - heap.head_chunk) * sizeof(int);
+    int dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
     printf("%d\n",dif);
     
     heap_free(str2);
