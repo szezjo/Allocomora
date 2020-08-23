@@ -390,7 +390,7 @@ size_t heap_get_block_size(const void* memblock) {
     return tmp->size;
 }
 
-size_t calc_to_the_end_of_the_page(struct chunk_t *chunk) {
+size_t calc_size_in_page(struct chunk_t *chunk) {
     struct chunk_t *p = heap.head_chunk;
     size_t dist=0;
     while(p!=chunk) {
