@@ -4,7 +4,7 @@
 #include "allocomora.h"
 #include "custom_unistd.h"
 
-// Control number: 104
+// Control number: 105
 static struct heap_t heap;
 
 int heap_setup() {
@@ -36,6 +36,8 @@ int heap_setup() {
     heap.chunks=1;
 
     update_end_fence();
+    update_chunk_checksum(heap.head_chunk);
+    update_heap_checksum();
 
     return 0;
 }
@@ -48,6 +50,7 @@ void heap_free(void* memblock) {
     if(chunk->prev!=NULL && chunk->prev->alloc==0) chunk=merge(chunk->prev,chunk,1);
     if(chunk->next!=NULL && chunk->next->alloc==0) chunk=merge(chunk,chunk->next,1);
 
+    update_chunk_checksum(chunk);
     update_heap_data();
 }
 
@@ -56,6 +59,26 @@ void update_end_fence() {
     int *end_fence_e=(int*)(heap.tail_chunk+sizeof(struct chunk_t)+heap.tail_chunk->size);
     memcpy(end_fence_e,&end_fence,sizeof(int));
     heap.end_fence_p=end_fence_e;
+    update_heap_checksum();
+}
+
+void update_chunk_checksum(struct chunk_t *chunk) {
+    chunk->checksum=1;
+    int newsum=0;
+    for(int i=0; i<sizeof(struct chunk_t); i++) {
+        newsum+=*(((char*)chunk)+i);
+    }
+    chunk->checksum=newsum;
+}
+
+void update_heap_checksum() {
+    heap.checksum=1;
+    int newsum=0;
+    struct heap_t *p = &heap;
+    for(int i=0; i<sizeof(struct heap_t); i++) {
+        newsum+=*(((char*)p)+i);
+    }
+    heap.checksum=newsum;
 }
 
 void *find_free_chunk(size_t size) {
@@ -113,6 +136,8 @@ void update_heap_data() {
     struct chunk_t *ch = heap.head_chunk;
     while(ch->next!=NULL) ch=ch->next;
     heap.tail_chunk=ch;
+
+    update_heap_checksum();
 }
 
 void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
@@ -125,6 +150,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             chunk_to_alloc->debug_line=fileline;
             chunk_to_alloc->debug_file=filename;
             update_heap_data();
+            update_chunk_checksum(chunk_to_alloc);
             return (void*)((char*)chunk_to_alloc+sizeof(struct chunk_t));
         }
         else if(chunk_to_alloc->size>count+sizeof(struct chunk_t)) {
@@ -138,6 +164,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             res->alloc=1;
             res->debug_line=fileline;
             res->debug_file=filename;
+            update_chunk_checksum(res);
             update_heap_data();
             return (void*)((char*)res+sizeof(struct chunk_t));
         }
@@ -165,11 +192,13 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
         memcpy(new_tail,&new_chunk,sizeof(struct chunk_t));
         heap.tail_chunk=new_tail;
         heap.chunks++;
+        update_chunk_checksum(new_tail);
     }
     else {
         heap.tail_chunk->size=heap.tail_chunk->size+wanted_memory;
     }
 
+    update_chunk_checksum(heap.tail_chunk);
     update_end_fence();
     return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
 }
@@ -179,6 +208,7 @@ void *heap_calloc_debug(size_t number, size_t size, int fileline, const char* fi
     struct chunk_t *p = heap_malloc_debug(size_to_alloc,fileline,filename);
     if(p==NULL) return NULL;
     memset(p,0,size_to_alloc);
+    update_chunk_checksum(p);
     return (void*)((char*)p+sizeof(struct chunk_t));
 }
 
@@ -225,9 +255,13 @@ struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_
 
     chunk1->size=chunk1->size+chunk2->size+sizeof(struct chunk_t);
     chunk1->next=chunk2->next;
-    if(chunk1->next) chunk1->next->prev=chunk1;
-    update_heap_data();
+    if(chunk1->next) {
+        chunk1->next->prev=chunk1;
+        update_chunk_checksum(chunk1->next);
+    }
     heap.chunks--;
+    update_heap_data();
+    update_chunk_checksum(chunk1);
     printf("Merged %p (%ld)\n",chunk1,chunk1->size);
     return chunk1;
 }
@@ -245,7 +279,16 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     chunk_to_split->size=size;
     chunk_to_split->next=cut_p;
     heap.chunks++;
-    if(cut_p->next && cut_p->next->alloc==0) merge(cut_p,cut_p->next,1);
+    if(cut_p->next) {
+        if (cut_p->next->alloc==0) merge(cut_p,cut_p->next,1);
+        else {
+            cut_p->next->prev=cut_p;
+            update_chunk_checksum(cut_p->next);
+        }
+    }
+    update_chunk_checksum(cut_p);
+    update_chunk_checksum(chunk_to_split);
+    update_heap_checksum();
     return chunk_to_split;
 }
 
@@ -323,10 +366,35 @@ uint64_t heap_get_free_gaps_count(void) {
     return count;
 }
 
+size_t heap_get_block_size(const void* memblock) {
+    if (get_pointer_type(memblock)!=pointer_valid) return 0;
+    struct chunk_t *tmp = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
+    return tmp->size;
+}
+
 
 
 int main() {
     int tmp = heap_setup();
+
+    printf("Used space: %lu\n",heap_get_used_space());
+    printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
+    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
+    printf("Free space: %lu\n",heap_get_free_space());
+    printf("Largest free area: %lu\n",heap_get_largest_free_area());
+    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
+
+    /*struct chunk_t *p = heap_malloc(250);
+    printf("\nAllocated 250 blocks\n\n");
+
+    printf("Used space: %lu\n",heap_get_used_space());
+    printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
+    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
+    printf("Free space: %lu\n",heap_get_free_space());
+    printf("Largest free area: %lu\n",heap_get_largest_free_area());
+    printf("Free blocks: %llu\n",heap_get_free_gaps_count());*/
+
+
     //struct chunk_t *p = find_free_chunk(150);
     /* printf("err: %d\n",tmp);
     printf("End fence address: %p\n",heap.end_fence_p);
