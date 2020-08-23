@@ -90,19 +90,9 @@ int verify_chunk_checksum(struct chunk_t *chunk) {
     return 0;
 }
 
-void update_heap_checksum() {
-    heap.checksum=1;
-    int newsum=0;
-    struct heap_t *p = &heap;
-    for(int i=0; i<sizeof(struct heap_t); i++) {
-        newsum+=*(((char*)p)+i);
-    }
-    heap.checksum=newsum;
-}
-
 int verify_heap_checksum() {
     int oldsum=heap.checksum;
-    update_heap_checksum());
+    update_heap_checksum();
     int newsum=heap.checksum;
     heap.checksum=oldsum;
     if(oldsum!=newsum) return 1;
@@ -400,6 +390,22 @@ size_t heap_get_block_size(const void* memblock) {
     return tmp->size;
 }
 
+size_t calc_to_the_end_of_the_page(struct chunk_t *chunk) {
+    struct chunk_t *p = heap.head_chunk;
+    size_t dist=0;
+    while(p!=chunk) {
+        dist+=sizeof(struct chunk_t)+p->size;
+        if(p->next) p=p->next;
+        else return 0;
+    }
+    dist+=sizeof(struct chunk_t);
+    int page=dist/PAGE_SIZE+1;
+    size_t size = PAGE_SIZE-(dist%PAGE_SIZE);
+    if(page==heap.pages) size-=4;
+    if(chunk->size<size) return chunk->size;
+    return size;
+}
+
 
 
 int main() {
@@ -461,17 +467,22 @@ int main() {
     strcpy(str,"Ala ma kota");
     printf("%s\n",str);
     printf("Chunks: %d\n",heap.chunks);
+    printf("%lu\n", calc_to_the_end_of_the_page(heap.head_chunk->next));
+    size_t dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
+    printf("%lu\n",dif);
+    printf("%lu %lu\n",heap.head_chunk->size,heap.head_chunk->next->size);
     char *str2 = heap_realloc(str,12);
     printf("%s\n%s\n",str,str2);
     printf("Chunks: %d\n",heap.chunks);
-    int dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
+    dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
     printf("Test: %s %p\n",(char*)((char*)heap.head_chunk+sizeof(struct chunk_t)+2), str2);
-    printf("%d\n",dif);
+    printf("%lu\n",dif);
 
     struct chunk_t *tt = heap_get_data_block_start((char*)heap.head_chunk+sizeof(struct chunk_t)+2);
     printf("Size of tt: %ld\n", tt->size);
     
     heap_free(str2);
     printf("Chunks: %d\n",heap.chunks);
+    printf("%lu\n", calc_to_the_end_of_the_page(heap.head_chunk));
     
 }
