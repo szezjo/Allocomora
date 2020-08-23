@@ -264,6 +264,85 @@ void *heap_calloc(size_t number, size_t size) {
 void *heap_realloc(void *memblock, size_t size) {
     return heap_realloc_debug(memblock,size,0,NULL);
 }
+
+void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename) {
+    if(heap.pages<2) return NULL;
+    struct chunk_t *p = heap.head_chunk;
+    while(p) {
+        if(p->alloc==0) {
+            size_t dist = calc_dist(p);
+            if(!is_aligned(dist)) {
+                if(p->size==count) {
+                    p->alloc=1;
+                    p->debug_line=fileline;
+                    p->debug_file=filename;
+                    update_chunk_checksum(p);
+                    update_heap_data();
+                    return (void*)((char*)p+sizeof(struct chunk_t));
+                }
+                else if (p->size>count) {
+                    struct chunk_t *res=NULL;
+                    res=split(p,count);
+                    if(res==NULL) {
+                        printf("Can't split a chunk.\n");
+                        return NULL;
+                    }
+                    res->alloc=1;
+                    res->debug_line=fileline;
+                    res->debug_file=filename;
+                    update_chunk_checksum(res);
+                    update_heap_data();
+                    return (void*)((char*)res+sizeof(struct chunk_t));
+                }
+            }
+            if(p->size>=count+2*sizeof(struct chunk_t)) {
+                size_t size_in_page = calc_size_in_page(p, dist);
+                if(p->size>=size_in_page) {
+                    size_t remainder = p->size-size_in_page;
+                    if(remainder>=count+sizeof(struct chunk_t) && size_in_page>=sizeof(struct chunk_t)) {
+                        struct chunk_t *res=NULL;
+                        res=split(p,size_in_page-sizeof(struct chunk_t));
+                        if(res==NULL) {
+                            printf("Can't split a chunk.\n");
+                            return NULL;
+                        }
+                        res=split(res->next,count);
+                        if(res==NULL) {
+                            printf("Can't split a second chunk.\n");
+                            return NULL;
+                        }
+                        res->alloc=1;
+                        res->debug_line=fileline;
+                        res->debug_file=filename;
+                        update_chunk_checksum(res);
+                        update_heap_data();
+                        return (void*)((char*)res+sizeof(struct chunk_t));
+                    }
+                    else if (remainder==count && size_in_page>=sizeof(struct chunk_t)) {
+                        struct chunk_t *res=NULL;
+                        res=split(p,size_in_page-sizeof(struct chunk_t));
+                        if(res==NULL) {
+                            printf("Can't split a chunk.\n");
+                            return NULL;
+                        }
+                        if(res->next->size!=count) {
+                            printf("Something went wrong with splitting.\n");
+                            return NULL;
+                        }
+                        res->next->alloc=1;
+                        res->next->debug_line=fileline;
+                        res->next->debug_file=filename;
+                        update_chunk_checksum(res->next);
+                        update_heap_data();
+                        return (void*)((char*)res->next+sizeof(struct chunk_t));
+                    }
+                }
+            }
+        }
+        p=p->next;
+    }
+    return NULL;
+}
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode) {
     if(chunk1==NULL || chunk2==NULL) return NULL;
     if(chunk2->next==chunk1) return merge(chunk2, chunk1, safe_mode);
@@ -284,6 +363,8 @@ struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_
     return chunk1;
 }
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
+    if(chunk_to_split->size==size) return chunk_to_split;
+    if(chunk_to_split->size<size) return NULL;
     struct chunk_t cut;
     cut.size=chunk_to_split->size-size-sizeof(struct chunk_t);
     cut.first_fence=FIRFENCE;
@@ -390,7 +471,7 @@ size_t heap_get_block_size(const void* memblock) {
     return tmp->size;
 }
 
-size_t calc_size_in_page(struct chunk_t *chunk) {
+size_t calc_dist(struct chunk_t *chunk) {
     struct chunk_t *p = heap.head_chunk;
     size_t dist=0;
     while(p!=chunk) {
@@ -399,11 +480,19 @@ size_t calc_size_in_page(struct chunk_t *chunk) {
         else return 0;
     }
     dist+=sizeof(struct chunk_t);
+    return dist;
+}
+
+size_t calc_size_in_page(struct chunk_t *chunk, size_t dist) {
     int page=dist/PAGE_SIZE+1;
     size_t size = PAGE_SIZE-(dist%PAGE_SIZE);
     if(page==heap.pages) size-=4;
     if(chunk->size<size) return chunk->size;
     return size;
+}
+
+int is_aligned(size_t dist) {
+    return !!(dist%PAGE_SIZE);
 }
 
 
@@ -462,7 +551,7 @@ int main() {
     //printf("%ld %ld\n", heap.head_chunk->size, heap.head_chunk->next->size );
     //merge(heap.head_chunk,heap.head_chunk->next);
 
-    printf("Chunks: %d\n",heap.chunks);
+    /*printf("Chunks: %d\n",heap.chunks);
     char *str = heap_malloc(50);
     strcpy(str,"Ala ma kota");
     printf("%s\n",str);
@@ -483,6 +572,15 @@ int main() {
     
     heap_free(str2);
     printf("Chunks: %d\n",heap.chunks);
-    printf("%lu\n", calc_size_in_page(heap.head_chunk));
-    
+    printf("%lu\n", calc_size_in_page(heap.head_chunk));*/
+
+    char *str = heap_malloc_aligned_debug(50, 0, NULL);
+    if(str==NULL) printf("\nreturned NULL\n\n");
+    else printf("\n\n");
+    printf("Used space: %lu\n",heap_get_used_space());
+    printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
+    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
+    printf("Free space: %lu\n",heap_get_free_space());
+    printf("Largest free area: %lu\n",heap_get_largest_free_area());
+    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
 }

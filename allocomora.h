@@ -3,7 +3,7 @@
 
 #define KB 1024
 #define PAGE_SIZE (4*KB)
-#define PAGES_BGN 1
+#define PAGES_BGN 2
 #define FIRFENCE 369258303
 #define SECFENCE 495105411
 #define LASFENCE 693452304
@@ -50,6 +50,7 @@ void* heap_realloc_debug(void* memblock, size_t size, int fileline, const char* 
 void *heap_malloc(size_t count);
 void *heap_calloc(size_t number, size_t size);
 void *heap_realloc(void* memblock, size_t size);
+void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename);
 void heap_free(void* memblock);
 void *find_free_chunk(size_t size);
 enum pointer_type_t get_pointer_type(const void* pointer);
@@ -67,7 +68,9 @@ void update_chunk_checksum(struct chunk_t *chunk);
 void update_heap_checksum();
 int verify_chunk_checksum(struct chunk_t *chunk);
 int verify_heap_checksum();
-size_t calc_size_in_page(struct chunk_t *chunk);
+size_t calc_dist(struct chunk_t *chunk);
+size_t calc_size_in_page(struct chunk_t *chunk, size_t dist);
+int is_aligned(size_t dist);
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
