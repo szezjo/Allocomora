@@ -65,6 +65,8 @@ uint64_t heap_get_free_gaps_count(void);
 size_t heap_get_block_size(const void* memblock);
 void update_chunk_checksum(struct chunk_t *chunk);
 void update_heap_checksum();
+int verify_chunk_checksum(struct chunk_t *chunk);
+int verify_heap_checksum();
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 

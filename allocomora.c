@@ -81,6 +81,34 @@ void update_heap_checksum() {
     heap.checksum=newsum;
 }
 
+int verify_chunk_checksum(struct chunk_t *chunk) {
+    int oldsum=chunk->checksum;
+    update_chunk_checksum(chunk);
+    int newsum=chunk->checksum;
+    chunk->checksum=oldsum;
+    if(oldsum!=newsum) return 1;
+    return 0;
+}
+
+void update_heap_checksum() {
+    heap.checksum=1;
+    int newsum=0;
+    struct heap_t *p = &heap;
+    for(int i=0; i<sizeof(struct heap_t); i++) {
+        newsum+=*(((char*)p)+i);
+    }
+    heap.checksum=newsum;
+}
+
+int verify_heap_checksum() {
+    int oldsum=heap.checksum;
+    update_heap_checksum());
+    int newsum=heap.checksum;
+    heap.checksum=oldsum;
+    if(oldsum!=newsum) return 1;
+    return 0;
+}
+
 void *find_free_chunk(size_t size) {
     struct chunk_t *chunk_to_check=heap.head_chunk;
     size_t best_fit_size=-1;
