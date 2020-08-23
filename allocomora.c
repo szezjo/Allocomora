@@ -467,7 +467,7 @@ int main() {
     strcpy(str,"Ala ma kota");
     printf("%s\n",str);
     printf("Chunks: %d\n",heap.chunks);
-    printf("%lu\n", calc_to_the_end_of_the_page(heap.head_chunk->next));
+    printf("%lu\n", calc_size_in_page(heap.head_chunk->next));
     size_t dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
     printf("%lu\n",dif);
     printf("%lu %lu\n",heap.head_chunk->size,heap.head_chunk->next->size);
@@ -483,6 +483,6 @@ int main() {
     
     heap_free(str2);
     printf("Chunks: %d\n",heap.chunks);
-    printf("%lu\n", calc_to_the_end_of_the_page(heap.head_chunk));
+    printf("%lu\n", calc_size_in_page(heap.head_chunk));
     
 }
