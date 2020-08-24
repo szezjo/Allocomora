@@ -44,6 +44,31 @@ int heap_setup() {
     return 0;
 }
 
+int heap_delete(int force_mode) {
+    // If "force mode" is 1, all allocated blocks will be freed automatically.
+    if(!heap.is_set) return 1;
+    if(heap_validate()!=no_errors) return 2;
+    
+    struct chunk_t *p = heap.head_chunk;
+    while(p) {
+        if(p->alloc) {
+            if(force_mode==1) heap_free(p);
+            else return 3;
+        }
+        p=p->next;
+    }
+    void *check=custom_sbrk(-(heap_get_used_space()+heap_get_free_space()));
+    if(check==(void*)-1) return -1;
+    heap.is_set=0;
+    return 0;
+}
+
+int heap_reset(int force_mode) {
+    int res = heap_delete(force_mode);
+    if(res) return res;
+    return heap_setup();
+}
+
 void heap_free(void* memblock) {
     if(get_pointer_type(memblock)!=pointer_valid) return;
     struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
@@ -697,4 +722,6 @@ int main() {
 
     validate_and_print();
     heap_dump_debug_information();
+    heap_free(str);
+    heap_delete(0);
 }

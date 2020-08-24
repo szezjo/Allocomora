@@ -59,6 +59,8 @@ enum validation_code_t {
 };
 
 int heap_setup();
+int heap_delete(int safe_mode);
+int heap_reset();
 void *heap_malloc_debug(size_t count, int fileline, const char* filename);
 void* heap_calloc_debug(size_t number, size_t size, int fileline, const char* filename); 
 void* heap_realloc_debug(void* memblock, size_t size, int fileline, const char* filename);
