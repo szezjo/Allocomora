@@ -9,6 +9,9 @@
 #define SECFENCE 495105411
 #define LASFENCE 693452304
 
+// Debug options 
+#define LOG 1
+
 // Structures
 struct chunk_t {
     int first_fence;

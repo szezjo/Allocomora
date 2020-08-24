@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <stdint.h>
 #include "allocomora.h"
 #include "custom_unistd.h"
 
@@ -15,12 +16,15 @@ static pthread_mutexattr_t heap_mtxa;
 // Heap basic functions
 int heap_setup() {
     if(heap.is_set) {
-        printf("Heap is already set up.\n");
+        printf("-Log- Heap is already set up.\n");
         return 0;
     }
     
     heap.data=custom_sbrk(PAGES_BGN*PAGE_SIZE);
-    if (heap.data == (void*)-1) return -1;
+    if (heap.data == (void*)-1) {
+        if(LOG) printf("-Log- sbrk() error.\n");
+        return -1;
+    }
 
     struct chunk_t mainchunk;
     memset(&mainchunk,0,sizeof(mainchunk));
@@ -49,14 +53,21 @@ int heap_setup() {
     update_end_fence();
     update_chunk_checksum(heap.head_chunk);
     update_heap_checksum();
+    if(LOG) printf("-Log- Heap successfully initialized.\n");
 
     return 0;
 }
 
 int heap_delete(int force_mode) {
     // If "force mode" is 1, all allocated blocks will be freed automatically.
-    if(!heap.is_set) return 1;
-    if(heap_validate()!=no_errors) return 2;
+    if(!heap.is_set) {
+        if(LOG) printf("-Log- Heap isn't initialized.\n");
+        return 1;
+    }
+    if(heap_validate()!=no_errors) {
+        if(LOG) printf("-Log- Heap is corrupted.\n");
+        return 2;
+    }
     
     pthread_mutex_destroy(&heap_mtx);
     pthread_mutexattr_destroy(&heap_mtxa);
@@ -65,17 +76,25 @@ int heap_delete(int force_mode) {
     while(p) {
         if(p->alloc) {
             if(force_mode==1) heap_free(p);
-            else return 3;
+            else {
+                if(LOG) printf("-Log- Some blocks are still allocated. Use \"force mode\" to free them automatically or heap_free() to free them manually.\n");
+                return 3;
+            }
         }
         p=p->next;
     }
     void *check=custom_sbrk(-(heap_get_used_space()+heap_get_free_space()));
-    if(check==(void*)-1) return -1;
+    if(check==(void*)-1) {
+        if(LOG) printf("-Log- sbrk() error.\n");
+        return -1;
+    }
     heap.is_set=0;
+    if(LOG) printf("-Log- Heap successfully deleted.\n");
     return 0;
 }
 
 int heap_reset(int force_mode) {
+    if(LOG) printf("-Log- Resetting a heap.\n");
     int res = heap_delete(force_mode);
     if(res) return res;
     return heap_setup();
@@ -85,10 +104,9 @@ int heap_reset(int force_mode) {
 void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     pthread_mutex_lock(&heap_mtx);
     struct chunk_t *chunk_to_alloc = find_free_chunk(count);
-    printf("Found a free chunk %p.\n", chunk_to_alloc);
     if(chunk_to_alloc!=NULL) {
+        if(LOG) printf("-Log- Found a free chunk %p (%lu).\n", chunk_to_alloc, chunk_to_alloc->size);
         if(chunk_to_alloc->size==count) {
-            printf("Using a chunk %p.\n", chunk_to_alloc);
             chunk_to_alloc->alloc=1;
             chunk_to_alloc->debug_line=fileline;
             chunk_to_alloc->debug_file=filename;
@@ -98,11 +116,11 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             return (void*)((char*)chunk_to_alloc+sizeof(struct chunk_t));
         }
         else if(chunk_to_alloc->size>count+sizeof(struct chunk_t)) {
-            printf("Spliiting a chunk %p.\n", chunk_to_alloc);
+            if(LOG) printf("-Log- Chunk is too large. Splitting.\n");
             struct chunk_t *res=NULL;
             res=split(chunk_to_alloc,count);
             if (res==NULL) {
-                printf("Can't split a chunk.\n");
+                if(LOG) printf("-Log- Can't split a chunk.\n");
                 pthread_mutex_unlock(&heap_mtx);
                 return NULL;
             }
@@ -115,16 +133,18 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             return (void*)((char*)res+sizeof(struct chunk_t));
         }
     }
-    // free block not found. asking for more pages
+    if(LOG) printf("-Log- Free block not found. Asking for more space.\n");
     size_t wanted_size;
     if (heap.tail_chunk->alloc) wanted_size=count+sizeof(struct chunk_t);
     else wanted_size=count;
     intptr_t wanted_memory = PAGE_SIZE*((wanted_size/PAGE_SIZE)+(!!(wanted_size%PAGE_SIZE)));
     if (custom_sbrk(wanted_memory)==(void*)-1) {
         pthread_mutex_unlock(&heap_mtx);
+        if(LOG) printf("-Log- sbrk() error.\n");
         return NULL;
     }
     heap.pages+=wanted_memory/PAGE_SIZE;
+    if(LOG) printf("-Log- Pages increased to %d.\n",heap.pages);
 
     if(heap.tail_chunk->alloc) {
         struct chunk_t new_chunk;
@@ -149,6 +169,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
 
     update_chunk_checksum(heap.tail_chunk);
     update_end_fence();
+    if(LOG) printf("-Log- Heap size successfully increased.\n");
     pthread_mutex_unlock(&heap_mtx);
     return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
 }
@@ -165,20 +186,28 @@ void *heap_calloc_debug(size_t number, size_t size, int fileline, const char* fi
 void *heap_realloc_debug(void *memblock, size_t size, int fileline, const char *filename) {
     if(memblock==NULL) return heap_malloc_debug(size,fileline,filename);
     if(size==0) {
+        if(LOG) printf("-Log- Called realloc with size 0. A chunk will be freed.\n");
         heap_free(memblock);
         return NULL;
     }
     struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
     if(chunk->size==size) return memblock;
+    
+    pthread_mutex_lock(&heap_mtx);
     if(chunk->size>size+sizeof(struct chunk_t)) {
+        if(LOG) printf("-Log- Called realloc with smaller size than chunk's size. Splitting.\n");
         split(chunk,size);
         return memblock;
     }
     if(chunk->next && chunk->next->alloc==0 && chunk->next->size+chunk->size+sizeof(struct chunk_t)>size) {
+        if(LOG) printf("-Log- Found a free chunk next to given memblock. Merging and splitting.\n");
         merge(chunk,chunk->next,0);
         split(chunk,size);
         return memblock;
     }
+
+    if(LOG) printf("-Log- Using malloc-copy-free method.\n");
+    pthread_mutex_unlock(&heap_mtx);
 
     char *p = heap_malloc_debug(size, fileline, filename);
     if (p==NULL) return NULL;
@@ -191,7 +220,10 @@ void *heap_realloc_debug(void *memblock, size_t size, int fileline, const char *
 
 // *alloc_aligned functions
 void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename) {
-    if(heap.pages<2) return NULL;
+    if(heap.pages<2) {
+        if(LOG) printf("-Log- Aligned malloc requires min. 2 chunks.\n");
+        return NULL;
+    }
     pthread_mutex_lock(&heap_mtx);
     struct chunk_t *p = heap.head_chunk;
     while(p) {
@@ -199,6 +231,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
             size_t dist = calc_dist(p);
             if(!is_aligned(dist)) {
                 if(p->size==count) {
+                    if(LOG) printf("-Log- Found a needed chunk. Allocating.\n");
                     p->alloc=1;
                     p->debug_line=fileline;
                     p->debug_file=filename;
@@ -208,6 +241,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                     return (void*)((char*)p+sizeof(struct chunk_t));
                 }
                 else if (p->size>count) {
+                    if(LOG) printf("-Log- Found a needed chunk, but with more size. Splitting and allocating.\n");
                     struct chunk_t *res=NULL;
                     res=split(p,count);
                     if(res==NULL) {
@@ -229,16 +263,17 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                 if(p->size>=size_in_page) {
                     size_t remainder = p->size-size_in_page;
                     if(remainder>=count+sizeof(struct chunk_t) && size_in_page>=sizeof(struct chunk_t)) {
+                        if(LOG) printf("-Log- Found a needed chunk, but with more size. Splitting and allocating.\n");
                         struct chunk_t *res=NULL;
                         res=split(p,size_in_page-sizeof(struct chunk_t));
                         if(res==NULL) {
-                            printf("Can't split a chunk.\n");
+                            if(LOG) printf("-Log- Can't split a chunk.\n");
                             pthread_mutex_unlock(&heap_mtx);
                             return NULL;
                         }
                         res=split(res->next,count);
                         if(res==NULL) {
-                            printf("Can't split a second chunk.\n");
+                            if(LOG) printf("-Log- Can't split a second chunk.\n");
                             merge(p,p->next,1);
                             pthread_mutex_unlock(&heap_mtx);
                             return NULL;
@@ -252,15 +287,16 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                         return (void*)((char*)res+sizeof(struct chunk_t));
                     }
                     else if (remainder==count && size_in_page>=sizeof(struct chunk_t)) {
+                        if(LOG) printf("-Log- Found a needed chunk, but with more size. Splitting and allocating.\n");
                         struct chunk_t *res=NULL;
                         res=split(p,size_in_page-sizeof(struct chunk_t));
                         if(res==NULL) {
-                            printf("Can't split a chunk.\n");
+                            if(LOG) printf("-Log- Can't split a chunk.\n");
                             pthread_mutex_unlock(&heap_mtx);
                             return NULL;
                         }
                         if(res->next->size!=count) {
-                            printf("Something went wrong with splitting.\n");
+                            if(LOG) printf("-Log- Something went wrong with splitting. Please validate a heap for more details.\n");
                             merge(res,res->next,1);
                             pthread_mutex_unlock(&heap_mtx);
                             return NULL;
@@ -278,6 +314,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
         }
         p=p->next;
     }
+    if(LOG) printf("-Log- A needed chunk couldn't be found.\n");
     pthread_mutex_unlock(&heap_mtx);
     return NULL;
 }
@@ -301,15 +338,18 @@ void *heap_realloc_aligned_debug(void *memblock, size_t size, int fileline, cons
     if(chunk->size==size) return memblock;
     size_t dist = calc_dist(chunk);
     if(!is_aligned(dist) && chunk->size>size+sizeof(struct chunk_t)) {
+        if(LOG) printf("-Log- Found a chunk, but with more size. Splitting.\n");
         split(chunk,size);
         return memblock;
     }
     if(!is_aligned(dist) && chunk->next && chunk->next->alloc==0 && chunk->next->size+chunk->size+sizeof(struct chunk_t)>size) {
+        if(LOG) printf("-Log- Found a chunk next to given memblock. Merging.\n");
         merge(chunk,chunk->next,0);
         split(chunk,size);
         return memblock;
     }
 
+    if(LOG) printf("-Log- Trying malloc-copy-free method.\n");
     char *p = heap_malloc_aligned_debug(size, fileline, filename);
     if (p==NULL) return NULL;
     pthread_mutex_lock(&heap_mtx);
@@ -343,6 +383,7 @@ void *heap_realloc_aligned(void* memblock, size_t size) {
 void heap_free(void* memblock) {
     pthread_mutex_lock(&heap_mtx);
     if(get_pointer_type(memblock)!=pointer_valid) {
+        if(LOG) printf("-Log- A pointer is not valid and can't be used in heap_free().\n");
         pthread_mutex_unlock(&heap_mtx);
         return;
     }
@@ -354,6 +395,7 @@ void heap_free(void* memblock) {
 
     update_chunk_checksum(chunk);
     update_heap_data();
+    if(LOG) printf("-Log- A block is successfully freed.\n");
     pthread_mutex_unlock(&heap_mtx);
 }
 
@@ -362,7 +404,7 @@ struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_
     if(chunk2->next==chunk1) return merge(chunk2, chunk1, safe_mode);
     if(chunk1->next!=chunk2) return NULL;
     if(safe_mode==1 && chunk1->alloc==1 || chunk2->alloc==1) return NULL;
-    printf("Merging %p (%ld) with %p (%ld)\n",chunk1,chunk1->size,chunk2,chunk2->size);
+    if(LOG) printf("-Log- Merging %p (%ld) with %p (%ld)\n",chunk1,chunk1->size,chunk2,chunk2->size);
 
     chunk1->size=chunk1->size+chunk2->size+sizeof(struct chunk_t);
     chunk1->next=chunk2->next;
@@ -373,12 +415,15 @@ struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_
     heap.chunks--;
     update_heap_data();
     update_chunk_checksum(chunk1);
-    printf("Merged %p (%ld)\n",chunk1,chunk1->size);
+    if(LOG) printf("-Log- Merged %p (%ld)\n",chunk1,chunk1->size);
     return chunk1;
 }
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     if(chunk_to_split->size==size) return chunk_to_split;
-    if(chunk_to_split->size<size) return NULL;
+    if(chunk_to_split->size<size) {
+        if(LOG) printf("-Log- Given size is bigger than chunk's size. Aborting.\n");
+        return NULL;
+    }
     struct chunk_t cut;
     cut.size=chunk_to_split->size-size-sizeof(struct chunk_t);
     cut.first_fence=FIRFENCE;
@@ -420,12 +465,13 @@ void *find_free_chunk(size_t size) {
                 }
             }
             else if(chunk_to_check->size==size) {
-                printf("Found chunk with size %lu\n", size);
+                if(LOG) printf("-Log- Found chunk with size %lu\n", size);
                 return chunk_to_check;
             }
         }
         chunk_to_check=chunk_to_check->next;
     }
+    if(LOG && best_fit!=NULL) printf("-Log- Found chunk with size %lu\n",best_fit->size);
     return best_fit;
 }
 
@@ -694,10 +740,10 @@ int main() {
 
     printf("Used space: %lu\n",heap_get_used_space());
     printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
+    printf("Used blocks: %lu\n",heap_get_used_blocks_count());
     printf("Free space: %lu\n",heap_get_free_space());
     printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
+    printf("Free blocks: %lu\n",heap_get_free_gaps_count());
 
     /*struct chunk_t *p = heap_malloc(250);
     printf("\nAllocated 250 blocks\n\n");
@@ -773,10 +819,10 @@ int main() {
     printf("String: %s\n",str);
     printf("Used space: %lu\n",heap_get_used_space());
     printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
+    printf("Used blocks: %lu\n",heap_get_used_blocks_count());
     printf("Free space: %lu\n",heap_get_free_space());
     printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
+    printf("Free blocks: %lu\n",heap_get_free_gaps_count());
 
     validate_and_print();
     heap_dump_debug_information();
