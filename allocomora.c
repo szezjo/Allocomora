@@ -24,6 +24,8 @@ int heap_setup() {
     mainchunk.alloc=0;
     mainchunk.first_fence=FIRFENCE;
     mainchunk.second_fence=SECFENCE;
+    mainchunk.debug_file=NULL;
+    mainchunk.debug_line=0;
 
     memcpy(heap.data,&mainchunk,sizeof(struct chunk_t));
     heap.head_chunk=(struct chunk_t *)heap.data;
@@ -415,6 +417,8 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     cut.first_fence=FIRFENCE;
     cut.second_fence=SECFENCE;
     cut.alloc=0;
+    cut.debug_file=NULL;
+    cut.debug_line=0;
     cut.prev=chunk_to_split;
     cut.next=chunk_to_split->next;
     
@@ -540,7 +544,69 @@ int is_aligned(size_t dist) {
     return !!(dist%PAGE_SIZE);
 }
 
+enum validation_code_t heap_validate() {
+    if(verify_heap_checksum()) return err_heap_checksum;
+    if(heap.head_chunk==NULL) return err_head_is_null;
+    if(heap.tail_chunk==NULL) return err_tail_is_null;
+    if((char*)heap.head_chunk!=(char*)heap.data) return err_invalid_head;
+    if(*(heap.end_fence_p)!=LASFENCE) return err_end_fence;
 
+    struct chunk_t *p = heap.head_chunk;
+    struct chunk_t *prev = NULL;
+    while(p) {
+        if(p->first_fence!=FIRFENCE) return err_chunk_fence1;
+        if(p->second_fence!=SECFENCE) return err_chunk_fence2;
+        if(verify_chunk_checksum(p)) return err_chunk_checksum;
+        if(p->next && p->next!=p+sizeof(struct chunk_t)+p->size) return err_invalid_next;
+        if(p->prev!=prev) return err_invalid_prev;
+        prev=p;
+        p=p->next;
+    }
+    if(heap.tail_chunk!=prev) return err_invalid_tail;
+    return no_errors;
+}
+
+enum validation_code_t validate_and_print() {
+    enum validation_code_t ret = heap_validate();
+    if(ret==0) printf("[Heap validation] No errors\n");
+    else if(ret==1) printf("[Heap validation] Heap checksum error\n");
+    else if(ret==2) printf("[Heap validation] Head is NULL\n");
+    else if(ret==3) printf("[Heap validation] Tail is NULL\n");
+    else if(ret==4) printf("[Heap validation] End fence error\n");
+    else if(ret==5) printf("[Heap validation] First fence error\n");
+    else if(ret==6) printf("[Heap validation] Second fence error\n");
+    else if(ret==7) printf("[Heap validation] Chunk checksum error\n");
+    else if(ret==8) printf("[Heap validation] Invalid prev\n");
+    else if(ret==9) printf("[Heap validation] Invalid next\n");
+    else if(ret==10) printf("[Heap validation] Invalid head\n");
+    else if(ret==11) printf("[Heap validation] Invalid tail\n");
+    return ret;
+}
+
+void heap_dump_debug_information() {
+    printf("\n***  HEAP INFO  ***\n");
+    struct chunk_t *p = heap.head_chunk;
+    int cnt=0;
+    
+    while(p) {
+        printf("* Chunk %d:\n",++cnt);
+        printf("- Chunk address: %p\n",p);
+        printf("- Allocated: %d\n",p->alloc);
+        printf("- Chunk size: %lu (incl. metadata: %lu)\n",p->size,p->size+sizeof(struct chunk_t));
+        if(p->debug_line!=0)printf("- Debug fileline: %d\n",p->debug_line);
+        if(p->debug_file!=NULL)printf("- Debug filename: %s\n",p->debug_file);
+        printf("\n");
+        p=p->next;
+    }
+
+    printf("* Heap data:\n");
+    printf("- Heap size: %lu\n",heap_get_used_space()+heap_get_free_space());
+    printf("- Bytes used: %lu\n",heap_get_used_space());
+    printf("- Bytes free: %lu\n",heap_get_free_space());
+    printf("- Largest free chunk to use: %lu\n",heap_get_largest_free_area());
+
+    printf("\n*******************\n"); 
+}
 
 int main() {
     int tmp = heap_setup();
@@ -619,7 +685,7 @@ int main() {
     printf("Chunks: %d\n",heap.chunks);
     printf("%lu\n", calc_size_in_page(heap.head_chunk));*/
 
-    char *str = heap_malloc_aligned_debug(50, 0, NULL);
+    char *str = heap_malloc_aligned_debug(50, __LINE__, __FILE__);
     if(str==NULL) printf("\nreturned NULL\n\n");
     else printf("\n\n");
     printf("Used space: %lu\n",heap_get_used_space());
@@ -628,4 +694,7 @@ int main() {
     printf("Free space: %lu\n",heap_get_free_space());
     printf("Largest free area: %lu\n",heap_get_largest_free_area());
     printf("Free blocks: %llu\n",heap_get_free_gaps_count());
+
+    validate_and_print();
+    heap_dump_debug_information();
 }

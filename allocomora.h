@@ -43,6 +43,21 @@ enum pointer_type_t
       pointer_end_fence // if get_pointer_type returns it, pointer points at the end fence (int at the end of the heap).
 };
 
+enum validation_code_t {
+    no_errors,
+    err_heap_checksum,
+    err_head_is_null,
+    err_tail_is_null,
+    err_end_fence,
+    err_chunk_fence1,
+    err_chunk_fence2,
+    err_chunk_checksum,
+    err_invalid_prev,
+    err_invalid_next,
+    err_invalid_head,
+    err_invalid_tail
+};
+
 int heap_setup();
 void *heap_malloc_debug(size_t count, int fileline, const char* filename);
 void* heap_calloc_debug(size_t number, size_t size, int fileline, const char* filename); 
@@ -76,6 +91,8 @@ int verify_heap_checksum();
 size_t calc_dist(struct chunk_t *chunk);
 size_t calc_size_in_page(struct chunk_t *chunk, size_t dist);
 int is_aligned(size_t dist);
+enum validation_code_t heap_validate(void);
+void heap_dump_debug_information(void);
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode);
 struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size);
 
