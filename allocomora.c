@@ -343,6 +343,51 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
     }
     return NULL;
 }
+
+void *heap_calloc_aligned_debug(size_t number, size_t size, int fileline, const char* filename) {
+    size_t size_to_alloc = number*size;
+    struct chunk_t *p = heap_malloc_aligned_debug(size_to_alloc,fileline,filename);
+    if(p==NULL) return NULL;
+    memset(p,0,size_to_alloc);
+    update_chunk_checksum(p);
+    return (void*)((char*)p+sizeof(struct chunk_t));
+}
+
+void *heap_realloc_aligned_debug(void *memblock, size_t size, int fileline, const char *filename) {
+    if(memblock==NULL) return heap_malloc_aligned_debug(size,fileline,filename);
+    if(size==0) {
+        heap_free(memblock);
+        return NULL;
+    }
+    struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
+    if(chunk->size==size) return memblock;
+    size_t dist = calc_dist(chunk);
+    if(!is_aligned(dist) && chunk->size>size+sizeof(struct chunk_t)) {
+        split(chunk,size);
+        return memblock;
+    }
+    if(!is_aligned(dist) && chunk->next && chunk->next->alloc==0 && chunk->next->size+chunk->size+sizeof(struct chunk_t)>size) {
+        merge(chunk,chunk->next,0);
+        split(chunk,size);
+        return memblock;
+    }
+
+    char *p = heap_malloc_aligned_debug(size, fileline, filename);
+    if (p==NULL) return NULL;
+    memcpy(p,memblock,chunk->size);
+    heap_free(memblock);
+    return p;
+}
+
+void *heap_malloc_aligned(size_t count) {
+    return heap_malloc_aligned_debug(count,0,NULL);
+}
+void *heap_calloc_aligned(size_t number, size_t size) {
+    return heap_calloc_aligned_debug(number,size,0,NULL);
+}
+void *heap_realloc_aligned(void* memblock, size_t size) {
+    return heap_realloc_aligned_debug(memblock,size,0,NULL);
+}
 struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_mode) {
     if(chunk1==NULL || chunk2==NULL) return NULL;
     if(chunk2->next==chunk1) return merge(chunk2, chunk1, safe_mode);
