@@ -37,8 +37,7 @@ struct heap_t {
 };
 
 // Enums
-enum pointer_type_t
-{
+enum pointer_type_t {
       pointer_null,
       pointer_out_of_heap,
       pointer_control_block,
