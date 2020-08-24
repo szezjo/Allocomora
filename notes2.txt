@@ -1,0 +1,12 @@
+Walidacja sterty:
+- czy head_chunk lub tail_chunk nie są NULL
+- czy end_fence_p równa się wartości LASFENCE
+- czy suma kontrolna jest poprawna
+
+Walidacja bloków:
+- czy first_fence oraz second_fence posiadają odpowiednie wartości
+- czy suma kontrolna jest poprawna
+- czy prev i next wskazują na odpowiednie bloki
+
+Sprawdź czy tail_chunk jest równy ostatniemu blokowi
+

@@ -5,7 +5,7 @@
 #include "allocomora.h"
 #include "custom_unistd.h"
 
-// Control number: 105
+// Control number: 110
 static struct heap_t heap;
 static pthread_mutex_t heap_mtx;
 static pthread_mutexattr_t heap_mtxa;
