@@ -1,11 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 #include "allocomora.h"
 #include "custom_unistd.h"
 
 // Control number: 105
 static struct heap_t heap;
+static pthread_mutex_t heap_mtx;
+static pthread_mutexattr_t heap_mtxa;
 
 int heap_setup() {
     if(heap.is_set) {
@@ -32,6 +35,9 @@ int heap_setup() {
     heap.tail_chunk=(struct chunk_t *)heap.data;
     int last_fence=LASFENCE;
     
+    pthread_mutexattr_init(&heap_mtxa);
+    pthread_mutexattr_settype(&heap_mtxa,PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&heap_mtx,&heap_mtxa);
 
     heap.is_set=1;
     heap.pages=PAGES_BGN;
@@ -49,6 +55,9 @@ int heap_delete(int force_mode) {
     if(!heap.is_set) return 1;
     if(heap_validate()!=no_errors) return 2;
     
+    pthread_mutex_destroy(&heap_mtx);
+    pthread_mutexattr_destroy(&heap_mtxa);
+
     struct chunk_t *p = heap.head_chunk;
     while(p) {
         if(p->alloc) {
@@ -70,7 +79,11 @@ int heap_reset(int force_mode) {
 }
 
 void heap_free(void* memblock) {
-    if(get_pointer_type(memblock)!=pointer_valid) return;
+    pthread_mutex_lock(&heap_mtx);
+    if(get_pointer_type(memblock)!=pointer_valid) {
+        pthread_mutex_unlock(&heap_mtx);
+        return;
+    }
     struct chunk_t *chunk = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
     chunk->alloc=0;
 
@@ -79,14 +92,17 @@ void heap_free(void* memblock) {
 
     update_chunk_checksum(chunk);
     update_heap_data();
+    pthread_mutex_unlock(&heap_mtx);
 }
 
 void update_end_fence() {
+    pthread_mutex_lock(&heap_mtx);
     int end_fence=LASFENCE;
     int *end_fence_e=(int*)(heap.tail_chunk+sizeof(struct chunk_t)+heap.tail_chunk->size);
     memcpy(end_fence_e,&end_fence,sizeof(int));
     heap.end_fence_p=end_fence_e;
     update_heap_checksum();
+    pthread_mutex_unlock(&heap_mtx);
 }
 
 void update_chunk_checksum(struct chunk_t *chunk) {
@@ -186,6 +202,7 @@ void update_heap_data() {
 }
 
 void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
+    pthread_mutex_lock(&heap_mtx);
     struct chunk_t *chunk_to_alloc = find_free_chunk(count);
     printf("Found a free chunk %p.\n", chunk_to_alloc);
     if(chunk_to_alloc!=NULL) {
@@ -196,6 +213,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             chunk_to_alloc->debug_file=filename;
             update_heap_data();
             update_chunk_checksum(chunk_to_alloc);
+            pthread_mutex_unlock(&heap_mtx);
             return (void*)((char*)chunk_to_alloc+sizeof(struct chunk_t));
         }
         else if(chunk_to_alloc->size>count+sizeof(struct chunk_t)) {
@@ -204,6 +222,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             res=split(chunk_to_alloc,count);
             if (res==NULL) {
                 printf("Can't split a chunk.\n");
+                pthread_mutex_unlock(&heap_mtx);
                 return NULL;
             }
             res->alloc=1;
@@ -211,6 +230,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
             res->debug_file=filename;
             update_chunk_checksum(res);
             update_heap_data();
+            pthread_mutex_unlock(&heap_mtx);
             return (void*)((char*)res+sizeof(struct chunk_t));
         }
     }
@@ -219,7 +239,10 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     if (heap.tail_chunk->alloc) wanted_size=count+sizeof(struct chunk_t);
     else wanted_size=count;
     intptr_t wanted_memory = PAGE_SIZE*((wanted_size/PAGE_SIZE)+(!!(wanted_size%PAGE_SIZE)));
-    if (custom_sbrk(wanted_memory)==(void*)-1) return NULL;
+    if (custom_sbrk(wanted_memory)==(void*)-1) {
+        pthread_mutex_unlock(&heap_mtx);
+        return NULL;
+    }
     heap.pages+=wanted_memory/PAGE_SIZE;
 
     if(heap.tail_chunk->alloc) {
@@ -245,6 +268,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
 
     update_chunk_checksum(heap.tail_chunk);
     update_end_fence();
+    pthread_mutex_unlock(&heap_mtx);
     return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
 }
 
@@ -277,7 +301,9 @@ void *heap_realloc_debug(void *memblock, size_t size, int fileline, const char *
 
     char *p = heap_malloc_debug(size, fileline, filename);
     if (p==NULL) return NULL;
+    pthread_mutex_lock(&heap_mtx);
     memcpy(p,memblock,chunk->size);
+    pthread_mutex_unlock(&heap_mtx);
     heap_free(memblock);
     return p;
 }
@@ -294,6 +320,7 @@ void *heap_realloc(void *memblock, size_t size) {
 
 void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename) {
     if(heap.pages<2) return NULL;
+    pthread_mutex_lock(&heap_mtx);
     struct chunk_t *p = heap.head_chunk;
     while(p) {
         if(p->alloc==0) {
@@ -305,6 +332,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                     p->debug_file=filename;
                     update_chunk_checksum(p);
                     update_heap_data();
+                    pthread_mutex_unlock(&heap_mtx);
                     return (void*)((char*)p+sizeof(struct chunk_t));
                 }
                 else if (p->size>count) {
@@ -312,6 +340,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                     res=split(p,count);
                     if(res==NULL) {
                         printf("Can't split a chunk.\n");
+                        pthread_mutex_unlock(&heap_mtx);
                         return NULL;
                     }
                     res->alloc=1;
@@ -319,6 +348,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                     res->debug_file=filename;
                     update_chunk_checksum(res);
                     update_heap_data();
+                    pthread_mutex_unlock(&heap_mtx);
                     return (void*)((char*)res+sizeof(struct chunk_t));
                 }
             }
@@ -331,11 +361,14 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                         res=split(p,size_in_page-sizeof(struct chunk_t));
                         if(res==NULL) {
                             printf("Can't split a chunk.\n");
+                            pthread_mutex_unlock(&heap_mtx);
                             return NULL;
                         }
                         res=split(res->next,count);
                         if(res==NULL) {
                             printf("Can't split a second chunk.\n");
+                            merge(p,p->next,1);
+                            pthread_mutex_unlock(&heap_mtx);
                             return NULL;
                         }
                         res->alloc=1;
@@ -343,6 +376,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                         res->debug_file=filename;
                         update_chunk_checksum(res);
                         update_heap_data();
+                        pthread_mutex_unlock(&heap_mtx);
                         return (void*)((char*)res+sizeof(struct chunk_t));
                     }
                     else if (remainder==count && size_in_page>=sizeof(struct chunk_t)) {
@@ -350,10 +384,13 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                         res=split(p,size_in_page-sizeof(struct chunk_t));
                         if(res==NULL) {
                             printf("Can't split a chunk.\n");
+                            pthread_mutex_unlock(&heap_mtx);
                             return NULL;
                         }
                         if(res->next->size!=count) {
                             printf("Something went wrong with splitting.\n");
+                            merge(res,res->next,1);
+                            pthread_mutex_unlock(&heap_mtx);
                             return NULL;
                         }
                         res->next->alloc=1;
@@ -361,6 +398,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
                         res->next->debug_file=filename;
                         update_chunk_checksum(res->next);
                         update_heap_data();
+                        pthread_mutex_unlock(&heap_mtx);
                         return (void*)((char*)res->next+sizeof(struct chunk_t));
                     }
                 }
@@ -368,6 +406,7 @@ void *heap_malloc_aligned_debug(size_t count, int fileline, const char *filename
         }
         p=p->next;
     }
+    pthread_mutex_unlock(&heap_mtx);
     return NULL;
 }
 
@@ -401,7 +440,9 @@ void *heap_realloc_aligned_debug(void *memblock, size_t size, int fileline, cons
 
     char *p = heap_malloc_aligned_debug(size, fileline, filename);
     if (p==NULL) return NULL;
+    pthread_mutex_lock(&heap_mtx);
     memcpy(p,memblock,chunk->size);
+    pthread_mutex_unlock(&heap_mtx);
     heap_free(memblock);
     return p;
 }
@@ -713,6 +754,8 @@ int main() {
     char *str = heap_malloc_aligned_debug(50, __LINE__, __FILE__);
     if(str==NULL) printf("\nreturned NULL\n\n");
     else printf("\n\n");
+    strcpy(str,"Ala ma kota\n");
+    printf("String: %s\n",str);
     printf("Used space: %lu\n",heap_get_used_space());
     printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
     printf("Used blocks: %llu\n",heap_get_used_blocks_count());
