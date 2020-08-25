@@ -740,10 +740,10 @@ int main() {
 
     printf("Used space: %lu\n",heap_get_used_space());
     printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %lu\n",heap_get_used_blocks_count());
+    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
     printf("Free space: %lu\n",heap_get_free_space());
     printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %lu\n",heap_get_free_gaps_count());
+    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
 
     /*struct chunk_t *p = heap_malloc(250);
     printf("\nAllocated 250 blocks\n\n");
@@ -819,10 +819,10 @@ int main() {
     printf("String: %s\n",str);
     printf("Used space: %lu\n",heap_get_used_space());
     printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %lu\n",heap_get_used_blocks_count());
+    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
     printf("Free space: %lu\n",heap_get_free_space());
     printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %lu\n",heap_get_free_gaps_count());
+    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
 
     validate_and_print();
     heap_dump_debug_information();
