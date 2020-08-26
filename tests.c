@@ -26,6 +26,7 @@ int main() {
     struct chunk_t *p1_chunk = heap_get_control_block(p1);
     assert(p1_chunk->size==400);
     heap_free(p1);
+    assert(heap_validate()==no_errors);
     assert(heap_get_used_blocks_count()==0);
     assert(heap_get_free_gaps_count()==1);
     assert(heap_get_free_space()==init_free_bytes);
@@ -42,12 +43,33 @@ int main() {
     p1_chunk = heap_get_control_block(p1);
     assert(p1_chunk->size==size);
     heap_free(p1);
+    assert(heap_validate()==no_errors);
     assert(heap_get_used_blocks_count()==0);
     assert(heap_get_free_gaps_count()==1);
     assert(heap_get_used_space()==init_used_bytes);
     assert(heap_get_free_space()==PAGE_SIZE*get_heap()->pages-heap_get_used_space());
     printf("* Test 3: success!\n");
 
+    printf("* Test 4: resetting a heap\n");
+    int_status=heap_reset();
+    assert(int_status==0);
+    assert(heap_validate()==no_errors);
+    assert(heap_get_used_blocks_count()==0);
+    assert(heap_get_free_gaps_count()==1);
+    assert(heap_get_used_space()==init_used_bytes);
+    assert(heap_get_free_space()==init_free_bytes);
+    printf("* Test 4: success!\n");
+
+    printf("* Test 5: trying to allocate too big chunk, it shall not pass\n");
+    p1 = heap_malloc(100*MB);
+    assert(p1==NULL);
+    assert(heap_validate()==no_errors);
+    assert(heap_get_used_blocks_count()==0);
+    assert(heap_get_free_gaps_count()==1);
+    printf("* Test 5: success!\n");
+
+    printf("* Test 6: ")
+    
 
 
     heap_delete(0);
