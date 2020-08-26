@@ -184,8 +184,7 @@ void *heap_calloc_debug(size_t number, size_t size, int fileline, const char* fi
     struct chunk_t *p = heap_malloc_debug(size_to_alloc,fileline,filename);
     if(p==NULL) return NULL;
     memset(p,0,size_to_alloc);
-    update_chunk_checksum(p);
-    return (void*)((char*)p+sizeof(struct chunk_t));
+    return p;
 }
 
 void *heap_realloc_debug(void *memblock, size_t size, int fileline, const char *filename) {
@@ -329,8 +328,7 @@ void *heap_calloc_aligned_debug(size_t number, size_t size, int fileline, const 
     struct chunk_t *p = heap_malloc_aligned_debug(size_to_alloc,fileline,filename);
     if(p==NULL) return NULL;
     memset(p,0,size_to_alloc);
-    update_chunk_checksum(p);
-    return (void*)((char*)p+sizeof(struct chunk_t));
+    return p;
 }
 
 void *heap_realloc_aligned_debug(void *memblock, size_t size, int fileline, const char *filename) {
@@ -455,6 +453,7 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     }
     update_chunk_checksum(cut_p);
     update_chunk_checksum(chunk_to_split);
+    update_heap_data();
     update_heap_checksum();
     return chunk_to_split;
 }
@@ -485,8 +484,8 @@ void *find_free_chunk(size_t size) {
 // Heap control functions
 enum pointer_type_t get_pointer_type(const void* pointer) {
     if(pointer==NULL) return pointer_null;
-    const char *p = (char*)pointer; // to perform pointer arithmetic
-    if(p<(char*)heap.data || p>=(char*)(heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int))) return pointer_out_of_heap;
+    char *p = (char*)pointer; // to perform pointer arithmetic
+    if(p<(char*)heap.data || p>=((char*)heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int))) return pointer_out_of_heap;
     if(p>=(char*)heap.end_fence_p && p<(char*)heap.end_fence_p+sizeof(int)) return pointer_end_fence;
     struct chunk_t *i=heap.head_chunk;
     while(i!=NULL) {

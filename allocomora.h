@@ -10,9 +10,9 @@
 #define SECFENCE 495105411
 #define LASFENCE 693452304
 
-// Debug options 
+// Debug options
 #define LOG 1
-#define TESTING 0
+#define TESTING 1
 
 // Structures
 struct chunk_t {
