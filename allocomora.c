@@ -596,7 +596,7 @@ uint64_t heap_get_free_gaps_count(void) {
 
 size_t heap_get_block_size(const void* memblock) {
     if (get_pointer_type(memblock)!=pointer_valid) return 0;
-    struct chunk_t *tmp = (struct chunk_t *)((char*)memblock-sizeof(struct chunk_t));
+    struct chunk_t *tmp = heap_get_control_block(memblock);
     return tmp->size;
 }
 
