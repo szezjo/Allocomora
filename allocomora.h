@@ -3,6 +3,7 @@
 
 // Basic data
 #define KB 1024
+#define MB (1024*1024)
 #define PAGE_SIZE (4*KB)
 #define PAGES_BGN 2
 #define FIRFENCE 369258303
@@ -125,5 +126,8 @@ enum validation_code_t validate_and_print();
 // Debug dump functions
 void heap_dump_debug_information(void);
 void print_pointer_type(const void* pointer);
+
+// Extra functions
+struct chunk_t *heap_get_control_block(const void *pointer);
 
 #endif //ALLOCOMORA_H

@@ -172,7 +172,6 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     if(TESTING) printf("-Testing- #1\n");
     update_chunk_checksum(heap.tail_chunk);
     if(TESTING) printf("-Testing- #2\n");
-    heap_dump_debug_information();
     update_end_fence();
     if(TESTING) printf("-Testing- #3\n");
     if(LOG) printf("-Log- Heap size successfully increased.\n");
@@ -529,7 +528,7 @@ void* heap_get_data_block_start(const void* pointer) {
 
     struct chunk_t *tmp = heap.head_chunk;
     while(tmp) {
-        if((char*)pointer>=(char*)tmp && (char*)pointer<(char*)tmp+sizeof(struct chunk_t)+tmp->size) return tmp;
+        if((char*)pointer>=(char*)tmp && (char*)pointer<(char*)tmp+sizeof(struct chunk_t)+tmp->size) return (void*)((char*)tmp+sizeof(struct chunk_t));
         tmp=tmp->next;
     }
     return NULL;
@@ -741,6 +740,13 @@ void print_pointer_type(const void* pointer) {
     else if (type==pointer_unallocated) printf("[%p] is unallocated\n", pointer);
     else if (type==pointer_valid) printf("[%p] is valid\n",pointer);
     else if (type==pointer_end_fence) printf("[%p] is at the end fence\n", pointer);
+}
+
+// Extra functions
+struct chunk_t *heap_get_control_block(const void *pointer) {
+    if(pointer==NULL) return NULL;
+    if(get_pointer_type(pointer)!=pointer_valid) return NULL;
+    return (struct chunk_t *)(pointer-sizeof(struct chunk_t));
 }
 
 
