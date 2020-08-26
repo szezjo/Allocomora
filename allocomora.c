@@ -147,6 +147,7 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
     if(LOG) printf("-Log- Pages increased to %d.\n",heap.pages);
 
     if(heap.tail_chunk->alloc) {
+        if(LOG) printf("-Log- Tail chunk is allocated. Creating a new chunk\n");
         struct chunk_t new_chunk;
         struct chunk_t *new_tail = heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t);
 
@@ -164,11 +165,16 @@ void *heap_malloc_debug(size_t count, int fileline, const char* filename) {
         update_chunk_checksum(new_tail);
     }
     else {
+        if(LOG) printf("-Log- Tail chunk is free. Extending it.\n");
         heap.tail_chunk->size=heap.tail_chunk->size+wanted_memory;
     }
 
+    if(TESTING) printf("-Testing- #1\n");
     update_chunk_checksum(heap.tail_chunk);
+    if(TESTING) printf("-Testing- #2\n");
+    heap_dump_debug_information();
     update_end_fence();
+    if(TESTING) printf("-Testing- #3\n");
     if(LOG) printf("-Log- Heap size successfully increased.\n");
     pthread_mutex_unlock(&heap_mtx);
     return heap_malloc_debug(count,fileline,filename); //try allocating again, now with more space.
@@ -434,8 +440,10 @@ struct chunk_t *split(struct chunk_t *chunk_to_split, size_t size) {
     cut.prev=chunk_to_split;
     cut.next=chunk_to_split->next;
     
-    struct chunk_t *cut_p = chunk_to_split+sizeof(struct chunk_t)+size;
+    struct chunk_t *cut_p = (struct chunk_t *)((char*)chunk_to_split+sizeof(struct chunk_t)+size);
+    if(TESTING) printf("-Testing- split(): before memcpy\n");
     memcpy(cut_p,&cut,sizeof(struct chunk_t));
+    if(TESTING) printf("-Testing- split(): after memcpy\n");
     chunk_to_split->size=size;
     chunk_to_split->next=cut_p;
     heap.chunks++;
@@ -505,7 +513,8 @@ void update_heap_data() {
 void update_end_fence() {
     pthread_mutex_lock(&heap_mtx);
     int end_fence=LASFENCE;
-    int *end_fence_e=(int*)(heap.tail_chunk+sizeof(struct chunk_t)+heap.tail_chunk->size);
+    int *end_fence_e=(int*)((char*)heap.tail_chunk+sizeof(struct chunk_t)+heap.tail_chunk->size);
+    if(TESTING) printf("-Testing- update_end_fence() before memcpy\n");
     memcpy(end_fence_e,&end_fence,sizeof(int));
     heap.end_fence_p=end_fence_e;
     update_heap_checksum();
@@ -671,7 +680,7 @@ enum validation_code_t heap_validate() {
         if(p->first_fence!=FIRFENCE) return err_chunk_fence1;
         if(p->second_fence!=SECFENCE) return err_chunk_fence2;
         if(verify_chunk_checksum(p)) return err_chunk_checksum;
-        if(p->next && p->next!=p+sizeof(struct chunk_t)+p->size) return err_invalid_next;
+        if(p->next && p->next!=(struct chunk_t *)((char*)p+sizeof(struct chunk_t)+p->size)) return err_invalid_next;
         if(p->prev!=prev) return err_invalid_prev;
         prev=p;
         p=p->next;
@@ -735,7 +744,7 @@ void print_pointer_type(const void* pointer) {
 }
 
 
-int main() {
+int main_old() {
     int tmp = heap_setup();
 
     printf("Used space: %lu\n",heap_get_used_space());
@@ -827,5 +836,23 @@ int main() {
     validate_and_print();
     heap_dump_debug_information();
     heap_free(str);
+    heap_delete(0);
+
+    return 0;
+}
+
+int main() {
+    heap_setup();
+    print_pointer_type(heap.end_fence_p);
+    void* p1 = heap_malloc(8 * 1024 * 1024); // 8MB
+	void* p2 = heap_malloc(8 * 1024 * 1024); // 8MB
+	void* p3 = heap_malloc(8 * 1024 * 1024); // 8MB
+	void* p4 = heap_malloc(45 * 1024 * 1024); // 45MB
+	assert(p1 != NULL); // malloc musi się udać
+	assert(p2 != NULL); // malloc musi się udać
+	assert(p3 != NULL); // malloc musi się udać
+	assert(p4 == NULL); // nie ma prawa zadziałać
+    heap_dump_debug_information();
+    heap_free(p1);heap_free(p2);heap_free(p3);
     heap_delete(0);
 }

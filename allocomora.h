@@ -11,6 +11,7 @@
 
 // Debug options 
 #define LOG 1
+#define TESTING 1
 
 // Structures
 struct chunk_t {
