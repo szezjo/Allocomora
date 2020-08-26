@@ -68,10 +68,6 @@ int main() {
     assert(heap_get_free_gaps_count()==1);
     printf("* Test 5: success!\n");
 
-    printf("* Test 6: ")
-    
-
-
     heap_delete(0);
     return 0;
 }
