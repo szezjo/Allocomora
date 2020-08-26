@@ -12,7 +12,7 @@
 
 // Debug options 
 #define LOG 1
-#define TESTING 1
+#define TESTING 0
 
 // Structures
 struct chunk_t {
@@ -129,5 +129,6 @@ void print_pointer_type(const void* pointer);
 
 // Extra functions
 struct chunk_t *heap_get_control_block(const void *pointer);
+struct heap_t *get_heap();
 
 #endif //ALLOCOMORA_H

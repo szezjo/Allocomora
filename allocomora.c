@@ -749,6 +749,10 @@ struct chunk_t *heap_get_control_block(const void *pointer) {
     return (struct chunk_t *)(pointer-sizeof(struct chunk_t));
 }
 
+struct heap_t *get_heap() {
+    return &heap;
+}
+
 
 int main_old() {
     int tmp = heap_setup();
@@ -847,7 +851,7 @@ int main_old() {
     return 0;
 }
 
-int main() {
+int main_old2() {
     heap_setup();
     print_pointer_type(heap.end_fence_p);
     void* p1 = heap_malloc(8 * 1024 * 1024); // 8MB
@@ -861,4 +865,5 @@ int main() {
     heap_dump_debug_information();
     heap_free(p1);heap_free(p2);heap_free(p3);
     heap_delete(0);
+    return 0;
 }
