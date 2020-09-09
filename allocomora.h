@@ -11,8 +11,8 @@
 #define LASFENCE 693452304
 
 // Debug options
-#define LOG 1
-#define TESTING 1
+#define LOG 0
+#define TESTING 0
 
 // Structures
 struct chunk_t {

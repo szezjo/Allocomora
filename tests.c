@@ -339,7 +339,6 @@ void test16() {
     size_t b5_size = heap_get_control_block(p4)->next->size;
     size_t largest=400;
     if(b5_size>400) largest=b5_size;
-    heap_dump_debug_information();
     assert(heap_get_largest_free_area()==largest);
     assert(heap_get_largest_used_block_size()==1750);
     assert(heap_get_free_space()==b5_size+400);
@@ -410,7 +409,6 @@ void test18() {
     assert(heap_validate()==err_heap_checksum);
     get_heap()->checksum=get_heap()->checksum-10;
     assert(heap_validate()==no_errors);
-    int good_checksum = get_heap()->checksum;
 
     struct chunk_t *c = get_heap()->head_chunk;
     get_heap()->head_chunk=NULL;
@@ -506,9 +504,20 @@ void test18() {
     assert(heap_validate()==no_errors);
 }
 
-int main() {
-    int int_status;
-    
+void* test19(void *pointer) {
+    pointer = (void*)heap_malloc(400);
+    assert(pointer!=NULL);
+    assert(get_pointer_type(pointer)==pointer_valid);
+    assert(heap_get_control_block(pointer)->size==400);
+    return pointer;
+}
+
+void* test19b(void *pointer) {
+    heap_free(pointer);
+    return NULL;
+}
+
+int main() {    
     printf("* Test 1: initialization of the heap :: ");
     if(LOG || TESTING) printf("\n");
     test1();
@@ -620,6 +629,23 @@ int main() {
     if(LOG || TESTING) printf("* Test 18 :: ");
     printf("SUCCESS!\n");
 
+    test4(); // to reset a heap and make sure everything's alright
+
+    /// MULTITHREADED TEST ///
+    printf("* Test 19: multithreaded malloc test :: ");
+    if(LOG || TESTING) printf("\n");
+    pthread_t threads[20];
+    char *p[20]={NULL};
+    for (int i=0; i<20; i++) pthread_create(&threads[i],NULL,test19,(void*)p[i]);
+    for (int i=0; i<20; i++) pthread_join(threads[i],(void**)&p[i]);
+    for (int i=0; i<20; i++) pthread_create(&threads[i],NULL,test19b,(void*)p[i]);
+    for (int i=0; i<20; i++) pthread_join(threads[i],NULL);
+    if(LOG || TESTING) printf("* Test 19 :: ");
+    printf("SUCCESS!\n");
+
+
+    heap_dump_debug_information();
+    assert(heap_validate()==no_errors);
     heap_delete(0);
     assert(get_heap()->is_set==0);
     return 0;

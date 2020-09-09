@@ -40,7 +40,6 @@ int heap_setup() {
     memcpy(heap.data,&mainchunk,sizeof(struct chunk_t));
     heap.head_chunk=(struct chunk_t *)heap.data;
     heap.tail_chunk=(struct chunk_t *)heap.data;
-    int last_fence=LASFENCE;
     
     pthread_mutexattr_init(&heap_mtxa);
     pthread_mutexattr_settype(&heap_mtxa,PTHREAD_MUTEX_RECURSIVE);
@@ -406,7 +405,7 @@ struct chunk_t *merge(struct chunk_t *chunk1, struct chunk_t *chunk2, char safe_
     if(chunk1==NULL || chunk2==NULL) return NULL;
     if(chunk2->next==chunk1) return merge(chunk2, chunk1, safe_mode);
     if(chunk1->next!=chunk2) return NULL;
-    if(safe_mode==1 && chunk1->alloc==1 || chunk2->alloc==1) return NULL;
+    if((safe_mode==1 && chunk1->alloc==1) || chunk2->alloc==1) return NULL;
     if(LOG) printf("-Log- Merging %p (%ld) with %p (%ld)\n",chunk1,chunk1->size,chunk2,chunk2->size);
 
     chunk1->size=chunk1->size+chunk2->size+sizeof(struct chunk_t);
@@ -750,119 +749,4 @@ struct chunk_t *heap_get_control_block(const void *pointer) {
 
 struct heap_t *get_heap() {
     return &heap;
-}
-
-
-int main_old() {
-    int tmp = heap_setup();
-
-    printf("Used space: %lu\n",heap_get_used_space());
-    printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
-    printf("Free space: %lu\n",heap_get_free_space());
-    printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
-
-    /*struct chunk_t *p = heap_malloc(250);
-    printf("\nAllocated 250 blocks\n\n");
-
-    printf("Used space: %lu\n",heap_get_used_space());
-    printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
-    printf("Free space: %lu\n",heap_get_free_space());
-    printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %llu\n",heap_get_free_gaps_count());*/
-
-
-    //struct chunk_t *p = find_free_chunk(150);
-    /* printf("err: %d\n",tmp);
-    printf("End fence address: %p\n",heap.end_fence_p);
-    printf("something\n");
-    struct chunk_t *p = find_free_chunk(1);
-    if(p==NULL) printf("returned NULL\n");
-    else printf("size of found block: %lu\n",p->size);
-    //printf("fence 1: %d\n",p->first_fence);
-    //find_free_chunk(150);
-    struct chunk_t *chk = heap_malloc_debug(3000, __LINE__, __FILE__);
-    printf("Size of chunk 1: %lu\n",heap.head_chunk->size);
-    //printf("Size of chunk 2: %lu\n",heap.head_chunk->next->size);
-    //printf("Size of chunk 3: %lu\n",heap.head_chunk->next->next->size);
-    printf("Size of chunk_t: %lu\n",sizeof(struct chunk_t));
-    printf("Updated end fence\n");
-    printf("Fence at the end: %d\n",*(heap.end_fence_p));
-    printf("End fence address: %p\n",heap.end_fence_p);
-    printf("Size of tail chunk: %lu\n",heap.tail_chunk->size);
-
-    printf("Out of heap address(?) %p\n",heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int));
-    print_pointer_type(NULL);
-    print_pointer_type(heap.end_fence_p);
-    print_pointer_type(heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t));
-    print_pointer_type(heap.tail_chunk+heap.tail_chunk->size+sizeof(struct chunk_t)+sizeof(int));
-    print_pointer_type(heap.head_chunk);
-    print_pointer_type(chk);
-    print_pointer_type(chk+4);
-    print_pointer_type(find_free_chunk(1)+sizeof(struct chunk_t)); */
-
-    //split(heap.head_chunk,2000);
-    //printf("%ld %ld\n", heap.head_chunk->size, heap.head_chunk->next->size );
-    //merge(heap.head_chunk,heap.head_chunk->next);
-
-    /*printf("Chunks: %d\n",heap.chunks);
-    char *str = heap_malloc(50);
-    strcpy(str,"Ala ma kota");
-    printf("%s\n",str);
-    printf("Chunks: %d\n",heap.chunks);
-    printf("%lu\n", calc_size_in_page(heap.head_chunk->next));
-    size_t dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
-    printf("%lu\n",dif);
-    printf("%lu %lu\n",heap.head_chunk->size,heap.head_chunk->next->size);
-    char *str2 = heap_realloc(str,12);
-    printf("%s\n%s\n",str,str2);
-    printf("Chunks: %d\n",heap.chunks);
-    dif = (heap.head_chunk->next - heap.head_chunk)-sizeof(struct chunk_t);
-    printf("Test: %s %p\n",(char*)((char*)heap.head_chunk+sizeof(struct chunk_t)+2), str2);
-    printf("%lu\n",dif);
-
-    struct chunk_t *tt = heap_get_data_block_start((char*)heap.head_chunk+sizeof(struct chunk_t)+2);
-    printf("Size of tt: %ld\n", tt->size);
-    
-    heap_free(str2);
-    printf("Chunks: %d\n",heap.chunks);
-    printf("%lu\n", calc_size_in_page(heap.head_chunk));*/
-
-    char *str = heap_malloc_aligned_debug(50, __LINE__, __FILE__);
-    if(str==NULL) printf("\nreturned NULL\n\n");
-    else printf("\n\n");
-    strcpy(str,"Ala ma kota\n");
-    printf("String: %s\n",str);
-    printf("Used space: %lu\n",heap_get_used_space());
-    printf("Largest used block: %lu\n", heap_get_largest_used_block_size());
-    printf("Used blocks: %llu\n",heap_get_used_blocks_count());
-    printf("Free space: %lu\n",heap_get_free_space());
-    printf("Largest free area: %lu\n",heap_get_largest_free_area());
-    printf("Free blocks: %llu\n",heap_get_free_gaps_count());
-
-    validate_and_print();
-    heap_dump_debug_information();
-    heap_free(str);
-    heap_delete(0);
-
-    return 0;
-}
-
-int main_old2() {
-    heap_setup();
-    print_pointer_type(heap.end_fence_p);
-    void* p1 = heap_malloc(8 * 1024 * 1024); // 8MB
-	void* p2 = heap_malloc(8 * 1024 * 1024); // 8MB
-	void* p3 = heap_malloc(8 * 1024 * 1024); // 8MB
-	void* p4 = heap_malloc(45 * 1024 * 1024); // 45MB
-	assert(p1 != NULL); // malloc musi się udać
-	assert(p2 != NULL); // malloc musi się udać
-	assert(p3 != NULL); // malloc musi się udać
-	assert(p4 == NULL); // nie ma prawa zadziałać
-    heap_dump_debug_information();
-    heap_free(p1);heap_free(p2);heap_free(p3);
-    heap_delete(0);
-    return 0;
 }
